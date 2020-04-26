@@ -359,10 +359,6 @@
     "message": "Блокиране на CSP отчетите",
     "description": "background information: https://github.com/gorhill/uBlock/issues/3150"
   },
-  "settingsStorageUsed": {
-    "message": "Използвана памет за съхранение: {{value}} байта",
-    "description": "English: Storage used: {{}} bytes"
-  },
   "settingsLastRestorePrompt": {
     "message": "Последно възстановяване:",
     "description": "English: Last restore:"
@@ -458,6 +454,10 @@
   "3pExternalListObsolete": {
     "message": "Остарял",
     "description": "used as a tooltip for the out-of-date icon beside a list"
+  },
+  "3pViewContent": {
+    "message": "Преглед на съдържанието",
+    "description": "used as a tooltip for eye icon beside a list"
   },
   "3pLastUpdate": {
     "message": "Последно обновяване: {{ago}}.\nЩракнете за принудително обновяване.",
@@ -827,6 +827,18 @@
     "message": "Сътрудници",
     "description": "English: Contributors"
   },
+  "aboutSourceCode": {
+    "message": "Изходен код",
+    "description": "Link text to source code repo"
+  },
+  "aboutTranslations": {
+    "message": "Преводи",
+    "description": "Link text to translations repo"
+  },
+  "aboutFilterLists": {
+    "message": "Списъци с филтри",
+    "description": "Link text to uBO's own filter lists repo"
+  },
   "aboutDependencies": {
     "message": "Външни зависимости (съвместими с GPLv3):",
     "description": "Shown in the About pane"
@@ -1002,6 +1014,22 @@
   "relaxBlockingMode": {
     "message": "Отпуснат режим на блокиране",
     "description": "Label for keyboard shortcut used to relax blocking mode (meant to replace 'Toggle blocking profile')"
+  },
+  "storageUsed": {
+    "message": "Използвано пространство: {{value}} {{unit}}",
+    "description": " In Setting pane, renders as (example): Storage used: 13.2 MB"
+  },
+  "KB": {
+    "message": "КБ",
+    "description": "short for 'kilobytes'"
+  },
+  "MB": {
+    "message": "МБ",
+    "description": "short for 'megabytes'"
+  },
+  "GB": {
+    "message": "ГБ",
+    "description": "short for 'gigabytes'"
   },
   "dummy": {
     "message": "Това поле трябва да бъде последното",

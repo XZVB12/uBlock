@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=560, initial-scale=1">
+<link rel="stylesheet" type="text/css" href="css/themes/default.css">
 <link rel="stylesheet" type="text/css" href="css/common.css">
 <link rel="stylesheet" href="css/fa-icons.css" type="text/css">
 <link rel="stylesheet" type="text/css" href="css/logger-ui.css">
@@ -141,7 +142,7 @@
             <div class="pane static" data-pane="static">
                 <div></div>
                 <div><textarea class="staticFilter" spellcheck="false" value=""></textarea>
-                   <button id="createStaticFilter" class="custom important" type="button" data-i18n="pickerCreate"></button>
+                   <button id="createStaticFilter" class="important" type="button" data-i18n="pickerCreate"></button>
                </div>
             </div>
         </div>
@@ -159,7 +160,7 @@
 
     <div id="cosmeticFilteringDialog" class="modalDialog">
         <textarea class="cosmeticFilters" value=""></textarea>
-        <button id="createCosmeticFilters" class="custom important" type="button" data-i18n="pickerCreate"></button>
+        <button id="createCosmeticFilters" class="important" type="button" data-i18n="pickerCreate"></button>
     </div>
 
     <div id="loggerStatsDialog">
@@ -193,10 +194,10 @@
         </div>
         <div><span data-i18n="loggerSettingHideColumnsPrompt"></span>
             <ul>
-            <li><label data-i18n="loggerSettingHideColumnTime"><input type="checkbox" data-column="0" /></label>
-            <li><label data-i18n="loggerSettingHideColumnFilter"><input type="checkbox" data-column="1" /></label>
-            <li><label data-i18n="loggerSettingHideColumnContext"><input type="checkbox" data-column="3" /></label>
-            <li><label data-i18n="loggerSettingHideColumnPartyness"><input type="checkbox" data-column="4" /></label>
+            <li><label data-i18n="loggerSettingHideColumnTime"><input type="checkbox" class="native" data-column="0" /></label>
+            <li><label data-i18n="loggerSettingHideColumnFilter"><input type="checkbox" class="native" data-column="1" /></label>
+            <li><label data-i18n="loggerSettingHideColumnContext"><input type="checkbox" class="native" data-column="3" /></label>
+            <li><label data-i18n="loggerSettingHideColumnPartyness"><input type="checkbox" class="native" data-column="4" /></label>
             </ul>
         </div>
         <div><label data-i18n="loggerSettingPerEntryLineCount"><input type="number" min="2" max="6"></label></div>

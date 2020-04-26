@@ -359,10 +359,6 @@
     "message": "CSP-rapporten blokkearje",
     "description": "background information: https://github.com/gorhill/uBlock/issues/3150"
   },
-  "settingsStorageUsed": {
-    "message": "Brûkte ûnthâldromte: {{value}} bytes",
-    "description": "English: Storage used: {{}} bytes"
-  },
   "settingsLastRestorePrompt": {
     "message": "Lêste werstel:",
     "description": "English: Last restore:"
@@ -458,6 +454,10 @@
   "3pExternalListObsolete": {
     "message": "Ferâldere.",
     "description": "used as a tooltip for the out-of-date icon beside a list"
+  },
+  "3pViewContent": {
+    "message": "ynhâld werjaan",
+    "description": "used as a tooltip for eye icon beside a list"
   },
   "3pLastUpdate": {
     "message": "Lêste fernijing: {{ago}}.",
@@ -744,7 +744,7 @@
     "description": "Below this sentence, the filter list(s) in which the filter was found"
   },
   "loggerStaticFilteringFinderSentence2": {
-    "message": "Statysk filter <code>{{filter}}</code> koe net yn ien fan de op dit stuit ynskeakele filterlisten fûn wurde",
+    "message": "Statysk filter koe net yn ien fan de op dit stuit ynskeakele filterlisten fûn wurde",
     "description": "Message to show when a filter cannot be found in any filter lists"
   },
   "loggerSettingDiscardPrompt": {
@@ -826,6 +826,18 @@
   "aboutContributors": {
     "message": "Meiwurkers",
     "description": "English: Contributors"
+  },
+  "aboutSourceCode": {
+    "message": "Source code",
+    "description": "Link text to source code repo"
+  },
+  "aboutTranslations": {
+    "message": "Translations",
+    "description": "Link text to translations repo"
+  },
+  "aboutFilterLists": {
+    "message": "Filter lists",
+    "description": "Link text to uBO's own filter lists repo"
   },
   "aboutDependencies": {
     "message": "Eksterne ôfhinklikheden (GPLv3-kompatibel):",
@@ -1002,6 +1014,22 @@
   "relaxBlockingMode": {
     "message": "Blokkearringsmodus beheine",
     "description": "Label for keyboard shortcut used to relax blocking mode (meant to replace 'Toggle blocking profile')"
+  },
+  "storageUsed": {
+    "message": "Storage used: {{value}} {{unit}}",
+    "description": " In Setting pane, renders as (example): Storage used: 13.2 MB"
+  },
+  "KB": {
+    "message": "KB",
+    "description": "short for 'kilobytes'"
+  },
+  "MB": {
+    "message": "MB",
+    "description": "short for 'megabytes'"
+  },
+  "GB": {
+    "message": "GB",
+    "description": "short for 'gigabytes'"
   },
   "dummy": {
     "message": "This entry must be the last one",
