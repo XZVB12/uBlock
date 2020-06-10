@@ -85,7 +85,7 @@
   },
   "popupBlockedStats": {
     "message": "{{count}} или {{percent}}%",
-    "description": "Example: 15 or 13%"
+    "description": "Example: 15 (13%)"
   },
   "popupBlockedSinceInstallPrompt": {
     "message": "общо досега",
@@ -179,25 +179,33 @@
     "message": "Щракнете, за да разрешите JavaScript за този сайт",
     "description": "Tooltip for the no-scripting per-site switch"
   },
+  "popupNoPopups_v2": {
+    "message": "Изкачащи прозорци",
+    "description": "Caption for the no-popups per-site switch"
+  },
   "popupNoLargeMedia_v2": {
     "message": "Големи мултимедийни елементи",
-    "description": "Tip for the no-large-media per-site switch"
+    "description": "Caption for the no-large-media per-site switch"
   },
   "popupNoCosmeticFiltering_v2": {
     "message": "Козметично филтриране",
-    "description": "Tip for the no-cosmetic-filtering per-site switch"
+    "description": "Caption for the no-cosmetic-filtering per-site switch"
   },
   "popupNoRemoteFonts_v2": {
     "message": "Външни шрифтове",
-    "description": "Tip for the no-remote-fonts per-site switch"
+    "description": "Caption for the no-remote-fonts per-site switch"
   },
   "popupNoScripting_v2": {
     "message": "JavaScript",
-    "description": "Tip for the no-scripting per-site switch"
+    "description": "Caption for the no-scripting per-site switch"
   },
   "popupMoreButton_v2": {
     "message": "Още",
-    "description": "Label to be used to toggle overview panel"
+    "description": "Label to be used to show popup panel sections"
+  },
+  "popupLessButton_v2": {
+    "message": "По-малко",
+    "description": "Label to be used to hide popup panel sections"
   },
   "popupTipGlobalRules": {
     "message": "Глобални правила: колона с правила, приложими към всички сайтове.",
@@ -254,6 +262,10 @@
   "popupHitDomainCount": {
     "message": "{{count}} от {{total}}",
     "description": "appears in popup"
+  },
+  "popupVersion": {
+    "message": "Версия",
+    "description": "Example of use: Version 1.26.4"
   },
   "pickerCreate": {
     "message": "Създаване",
@@ -744,7 +756,7 @@
     "description": "Below this sentence, the filter list(s) in which the filter was found"
   },
   "loggerStaticFilteringFinderSentence2": {
-    "message": "Статичният филтър <code>{{filter}}</code> не е намерен в никой от активните списъци с филтри",
+    "message": "Статичният филтър не е намерен в никой от активните списъци с филтри",
     "description": "Message to show when a filter cannot be found in any filter lists"
   },
   "loggerSettingDiscardPrompt": {

@@ -85,7 +85,7 @@
   },
   "popupBlockedStats": {
     "message": "{{count}} или {{percent}}%",
-    "description": "Example: 15 or 13%"
+    "description": "Example: 15 (13%)"
   },
   "popupBlockedSinceInstallPrompt": {
     "message": "од инсталације",
@@ -179,25 +179,33 @@
     "message": "Кликните да JavaScript не буде више онемогућен на овом сајту",
     "description": "Tooltip for the no-scripting per-site switch"
   },
+  "popupNoPopups_v2": {
+    "message": "Искачући прозори",
+    "description": "Caption for the no-popups per-site switch"
+  },
   "popupNoLargeMedia_v2": {
     "message": "Велики мултимедијски елементи",
-    "description": "Tip for the no-large-media per-site switch"
+    "description": "Caption for the no-large-media per-site switch"
   },
   "popupNoCosmeticFiltering_v2": {
     "message": "Естетско филтрирање",
-    "description": "Tip for the no-cosmetic-filtering per-site switch"
+    "description": "Caption for the no-cosmetic-filtering per-site switch"
   },
   "popupNoRemoteFonts_v2": {
     "message": "Удаљени фонтови",
-    "description": "Tip for the no-remote-fonts per-site switch"
+    "description": "Caption for the no-remote-fonts per-site switch"
   },
   "popupNoScripting_v2": {
     "message": "JavaScript",
-    "description": "Tip for the no-scripting per-site switch"
+    "description": "Caption for the no-scripting per-site switch"
   },
   "popupMoreButton_v2": {
     "message": "Више",
-    "description": "Label to be used to toggle overview panel"
+    "description": "Label to be used to show popup panel sections"
+  },
+  "popupLessButton_v2": {
+    "message": "Мање",
+    "description": "Label to be used to hide popup panel sections"
   },
   "popupTipGlobalRules": {
     "message": "Општа правила: ова колона је за правила која се примењују на свим сајтовима.",
@@ -254,6 +262,10 @@
   "popupHitDomainCount": {
     "message": "{{count}} од {{total}}",
     "description": "appears in popup"
+  },
+  "popupVersion": {
+    "message": "Верзија",
+    "description": "Example of use: Version 1.26.4"
   },
   "pickerCreate": {
     "message": "Креирај",
@@ -828,15 +840,15 @@
     "description": "English: Contributors"
   },
   "aboutSourceCode": {
-    "message": "Source code",
+    "message": "Изворни код",
     "description": "Link text to source code repo"
   },
   "aboutTranslations": {
-    "message": "Translations",
+    "message": "Преводи",
     "description": "Link text to translations repo"
   },
   "aboutFilterLists": {
-    "message": "Filter lists",
+    "message": "Листе филтера",
     "description": "Link text to uBO's own filter lists repo"
   },
   "aboutDependencies": {

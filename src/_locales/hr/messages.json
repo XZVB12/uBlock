@@ -85,7 +85,7 @@
   },
   "popupBlockedStats": {
     "message": "{{count}} ili {{percent}}%",
-    "description": "Example: 15 or 13%"
+    "description": "Example: 15 (13%)"
   },
   "popupBlockedSinceInstallPrompt": {
     "message": "od instalacije",
@@ -179,25 +179,33 @@
     "message": "Kliknite kako biste omogućili JavaScript na ovoj stranici",
     "description": "Tooltip for the no-scripting per-site switch"
   },
+  "popupNoPopups_v2": {
+    "message": "Skočni prozori",
+    "description": "Caption for the no-popups per-site switch"
+  },
   "popupNoLargeMedia_v2": {
     "message": "Veliki medija elementi",
-    "description": "Tip for the no-large-media per-site switch"
+    "description": "Caption for the no-large-media per-site switch"
   },
   "popupNoCosmeticFiltering_v2": {
     "message": "Estetski filteri",
-    "description": "Tip for the no-cosmetic-filtering per-site switch"
+    "description": "Caption for the no-cosmetic-filtering per-site switch"
   },
   "popupNoRemoteFonts_v2": {
     "message": "Udaljeni fontovi",
-    "description": "Tip for the no-remote-fonts per-site switch"
+    "description": "Caption for the no-remote-fonts per-site switch"
   },
   "popupNoScripting_v2": {
     "message": "JavaScript",
-    "description": "Tip for the no-scripting per-site switch"
+    "description": "Caption for the no-scripting per-site switch"
   },
   "popupMoreButton_v2": {
     "message": "Više",
-    "description": "Label to be used to toggle overview panel"
+    "description": "Label to be used to show popup panel sections"
+  },
+  "popupLessButton_v2": {
+    "message": "Manje",
+    "description": "Label to be used to hide popup panel sections"
   },
   "popupTipGlobalRules": {
     "message": "Globalna pravila: ovaj stupac je za pravila koja vrijede za sve stranice.",
@@ -254,6 +262,10 @@
   "popupHitDomainCount": {
     "message": "{{count}} od {{total}}",
     "description": "appears in popup"
+  },
+  "popupVersion": {
+    "message": "Verzija",
+    "description": "Example of use: Version 1.26.4"
   },
   "pickerCreate": {
     "message": "Stvaranje",
@@ -828,15 +840,15 @@
     "description": "English: Contributors"
   },
   "aboutSourceCode": {
-    "message": "Source code",
+    "message": "Izvorni kod",
     "description": "Link text to source code repo"
   },
   "aboutTranslations": {
-    "message": "Translations",
+    "message": "Prijevodi",
     "description": "Link text to translations repo"
   },
   "aboutFilterLists": {
-    "message": "Filter lists",
+    "message": "Liste filtera",
     "description": "Link text to uBO's own filter lists repo"
   },
   "aboutDependencies": {

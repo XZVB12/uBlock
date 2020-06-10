@@ -159,6 +159,10 @@ const onMessage = function(request, sender, callback) {
         µb.toggleHostnameSwitch(request);
         break;
 
+    case 'uiStyles':
+        response = µb.hiddenSettings.uiStyles;
+        break;
+
     case 'userSettings':
         response = µb.changeUserSettings(request.name, request.value);
         break;
@@ -264,17 +268,19 @@ const getFirewallRules = function(srcHostname, desHostnames) {
 const popupDataFromTabId = function(tabId, tabTitle) {
     const tabContext = µb.tabContextManager.mustLookup(tabId);
     const rootHostname = tabContext.rootHostname;
+    const µbus = µb.userSettings;
+    const µbhs = µb.hiddenSettings;
     const r = {
-        advancedUserEnabled: µb.userSettings.advancedUserEnabled,
+        advancedUserEnabled: µbus.advancedUserEnabled,
         appName: vAPI.app.name,
         appVersion: vAPI.app.version,
-        colorBlindFriendly: µb.userSettings.colorBlindFriendly,
+        colorBlindFriendly: µbus.colorBlindFriendly,
         cosmeticFilteringSwitch: false,
-        dfEnabled: µb.userSettings.dynamicFilteringEnabled,
-        firewallPaneMinimized: µb.userSettings.firewallPaneMinimized,
+        firewallPaneMinimized: µbus.firewallPaneMinimized,
         globalAllowedRequestCount: µb.localSettings.allowedRequestCount,
         globalBlockedRequestCount: µb.localSettings.blockedRequestCount,
-        fontSize: µb.hiddenSettings.popupFontSize,
+        fontSize: µbhs.popupFontSize,
+        godMode: µbhs.filterAuthorMode,
         netFilteringSwitch: false,
         rawURL: tabContext.rawURL,
         pageURL: tabContext.normalURL,
@@ -283,10 +289,18 @@ const popupDataFromTabId = function(tabId, tabTitle) {
         pageAllowedRequestCount: 0,
         pageBlockedRequestCount: 0,
         popupBlockedCount: 0,
+        popupPanelSections: µbus.popupPanelSections,
+        popupPanelDisabledSections: µbhs.popupPanelDisabledSections,
+        popupPanelLockedSections: µbhs.popupPanelLockedSections,
+        popupPanelHeightMode: µbhs.popupPanelHeightMode,
         tabId: tabId,
         tabTitle: tabTitle,
-        tooltipsDisabled: µb.userSettings.tooltipsDisabled
+        tooltipsDisabled: µbus.tooltipsDisabled
     };
+
+    if ( µbhs.uiPopupConfig !== 'undocumented' ) {
+        r.uiPopupConfig = µbhs.uiPopupConfig;
+    }
 
     const pageStore = µb.pageStoreFromTabId(tabId);
     if ( pageStore ) {
@@ -1159,7 +1173,10 @@ const onMessage = function(request, sender, callback) {
         break;
 
     case 'readHiddenSettings':
-        response = µb.stringFromHiddenSettings();
+        response = {
+            current: µb.hiddenSettings,
+            default: µb.hiddenSettingsDefault,
+        };
         break;
 
     case 'restoreUserData':

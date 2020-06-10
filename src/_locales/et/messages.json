@@ -85,7 +85,7 @@
   },
   "popupBlockedStats": {
     "message": "{{count}} või {{percent}}%",
-    "description": "Example: 15 or 13%"
+    "description": "Example: 15 (13%)"
   },
   "popupBlockedSinceInstallPrompt": {
     "message": "paigaldamise algusest",
@@ -179,25 +179,33 @@
     "message": "Klõpsa, et lõpetada sellel saidil JavaScripti keelamine",
     "description": "Tooltip for the no-scripting per-site switch"
   },
+  "popupNoPopups_v2": {
+    "message": "Hüpikaknad",
+    "description": "Caption for the no-popups per-site switch"
+  },
   "popupNoLargeMedia_v2": {
     "message": "Suured meediaelemendid",
-    "description": "Tip for the no-large-media per-site switch"
+    "description": "Caption for the no-large-media per-site switch"
   },
   "popupNoCosmeticFiltering_v2": {
     "message": "Ilufiltrid",
-    "description": "Tip for the no-cosmetic-filtering per-site switch"
+    "description": "Caption for the no-cosmetic-filtering per-site switch"
   },
   "popupNoRemoteFonts_v2": {
     "message": "Välised fondid",
-    "description": "Tip for the no-remote-fonts per-site switch"
+    "description": "Caption for the no-remote-fonts per-site switch"
   },
   "popupNoScripting_v2": {
     "message": "JavaScript",
-    "description": "Tip for the no-scripting per-site switch"
+    "description": "Caption for the no-scripting per-site switch"
   },
   "popupMoreButton_v2": {
     "message": "Rohkem",
-    "description": "Label to be used to toggle overview panel"
+    "description": "Label to be used to show popup panel sections"
+  },
+  "popupLessButton_v2": {
+    "message": "Vähem",
+    "description": "Label to be used to hide popup panel sections"
   },
   "popupTipGlobalRules": {
     "message": "Üldised reeglid: selle veeru reeglid kehtivad kõikidele saitidele.",
@@ -254,6 +262,10 @@
   "popupHitDomainCount": {
     "message": "{{count}}/{{total}}",
     "description": "appears in popup"
+  },
+  "popupVersion": {
+    "message": "Versioon",
+    "description": "Example of use: Version 1.26.4"
   },
   "pickerCreate": {
     "message": "Loo",

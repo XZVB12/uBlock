@@ -30,22 +30,20 @@
 
 /******************************************************************************/
 
-let popupFontSize;
+
+let popupFontSize = 'unset';
 vAPI.localStorage.getItemAsync('popupFontSize').then(value => {
     if ( typeof value !== 'string' || value === 'unset' ) { return; }
-    document.body.style.setProperty('font-size', value);
+    document.body.style.setProperty('--font-size', value);
     popupFontSize = value;
 });
 
 // https://github.com/chrisaljoudi/uBlock/issues/996
 //   Experimental: mitigate glitchy popup UI: immediately set the firewall
 //   pane visibility to its last known state. By default the pane is hidden.
-let dfPaneVisibleStored;
-vAPI.localStorage.getItemAsync('popupFirewallPane').then(value => {
-    dfPaneVisibleStored = value === true || value === 'true';
-    if ( dfPaneVisibleStored ) {
-        document.body.classList.add('dfEnabled');
-    }
+vAPI.localStorage.getItemAsync('popupPanelSections').then(bits => {
+    if ( typeof bits !== 'number' ) { return; }
+    sectionBitsToAttribute(bits);
 });
 
 /******************************************************************************/
@@ -154,10 +152,52 @@ const hashFromPopupData = function(reset) {
 const formatNumber = function(count) {
     if ( typeof count !== 'number' ) { return ''; }
     if ( count < 1e6 ) { return count.toLocaleString(); }
-    return count.toLocaleString(undefined, {
-        notation: 'compact',
-        maximumSignificantDigits: 4,
-    });
+
+    if (
+        intlNumberFormat === undefined &&
+        Intl.NumberFormat instanceof Function
+    ) {
+        const intl = new Intl.NumberFormat(undefined, {
+            notation: 'compact',
+            maximumSignificantDigits: 4
+        });
+        if (
+            intl.resolvedOptions instanceof Function &&
+            intl.resolvedOptions().hasOwnProperty('notation')
+        ) {
+            intlNumberFormat = intl;
+        }
+    }
+
+    if ( intlNumberFormat ) {
+        return intlNumberFormat.format(count);
+    }
+
+    // https://github.com/uBlockOrigin/uBlock-issues/issues/1027#issuecomment-629696676
+    //   For platforms which do not support proper number formatting, use
+    //   a poor's man compact form, which unfortunately is not i18n-friendly.
+    count /= 1000000;
+    if ( count >= 100 ) {
+      count = Math.floor(count * 10) / 10;
+    } else if ( count > 10 ) {
+      count = Math.floor(count * 100) / 100;
+    } else {
+      count = Math.floor(count * 1000) / 1000;
+    }
+    return (count).toLocaleString(undefined) + '\u2009M';
+};
+
+let intlNumberFormat;
+
+/******************************************************************************/
+
+const safePunycodeToUnicode = function(hn) {
+    const pretty = punycode.toUnicode(hn);
+    return pretty === hn ||
+           reCyrillicAmbiguous.test(pretty) === false ||
+           reCyrillicNonAmbiguous.test(pretty)
+        ? pretty
+        : hn;
 };
 
 /******************************************************************************/
@@ -270,8 +310,8 @@ const updateAllFirewallCells = function() {
 const buildAllFirewallRows = function() {
     // Do this before removing the rows
     if ( dfHotspots === null ) {
-        dfHotspots =
-            uDom('#actionSelector').on('click', 'span', setFirewallRuleHandler);
+        dfHotspots = uDom.nodeFromId('actionSelector');
+        dfHotspots.addEventListener('click', setFirewallRuleHandler);
     }
     dfHotspots.remove();
 
@@ -387,6 +427,9 @@ const renderPrivacyExposure = function() {
 /******************************************************************************/
 
 const updateHnSwitches = function() {
+    uDom.nodeFromId('no-popups').classList.toggle(
+        'on', popupData.noPopups === true
+    );
     uDom.nodeFromId('no-large-media').classList.toggle(
         'on', popupData.noLargeMedia === true
     );
@@ -413,18 +456,28 @@ const renderPopup = function() {
         document.title = popupData.appName + ' - ' + popupData.tabTitle;
     }
 
-    let elem = document.body;
-    elem.classList.toggle(
-        'advancedUser',
-        popupData.advancedUserEnabled === true
-    );
-    elem.classList.toggle(
-        'off',
-        popupData.pageURL === '' || popupData.netFilteringSwitch !== true
-    );
+    const isFiltering = popupData.netFilteringSwitch;
 
-    const canElementPicker = popupData.canElementPicker === true &&
-                           popupData.netFilteringSwitch === true;
+    const body = document.body;
+    body.classList.toggle('advancedUser', popupData.advancedUserEnabled === true);
+    body.classList.toggle('off', popupData.pageURL === '' || isFiltering !== true);
+    body.classList.toggle('needSave', popupData.matrixIsDirty === true);
+
+    // The hostname information below the power switch
+    {
+        const [ elemHn, elemDn ] = uDom.nodeFromId('hostname').children;
+        const { pageDomain, pageHostname } = popupData;
+        if ( pageDomain !== '' ) {
+            elemDn.textContent = safePunycodeToUnicode(pageDomain);
+            elemHn.textContent = pageHostname !== pageDomain
+                ? safePunycodeToUnicode(pageHostname.slice(0, -pageDomain.length - 1)) + '.'
+                : '';
+        } else {
+            elemHn.textContent = elemDn.textContent = '';
+        }
+    }
+
+    const canElementPicker = popupData.canElementPicker === true && isFiltering;
     uDom.nodeFromId('gotoPick').classList.toggle('enabled', canElementPicker);
     uDom.nodeFromId('gotoZap').classList.toggle('enabled', canElementPicker);
 
@@ -455,6 +508,11 @@ const renderPopup = function() {
     // Extra tools
     updateHnSwitches();
 
+    // Report popup count on badge
+    total = popupData.popupBlockedCount;
+    uDom.nodeFromSelector('#no-popups .fa-icon-badge')
+        .textContent = total ? Math.min(total, 99).toLocaleString() : '';
+
     // Report large media count on badge
     total = popupData.largeMediaCount;
     uDom.nodeFromSelector('#no-large-media .fa-icon-badge')
@@ -465,24 +523,6 @@ const renderPopup = function() {
     uDom.nodeFromSelector('#no-remote-fonts .fa-icon-badge')
         .textContent = total ? Math.min(total, 99).toLocaleString() : '';
 
-    // https://github.com/chrisaljoudi/uBlock/issues/470
-    // This must be done here, to be sure the popup is resized properly
-    const dfPaneVisible = popupData.dfEnabled;
-
-    // https://github.com/chrisaljoudi/uBlock/issues/1068
-    // Remember the last state of the firewall pane. This allows to
-    // configure the popup size early next time it is opened, which means a
-    // less glitchy popup at open time.
-    if ( dfPaneVisible !== dfPaneVisibleStored ) {
-        dfPaneVisibleStored = dfPaneVisible;
-        vAPI.localStorage.setItem('popupFirewallPane', dfPaneVisibleStored);
-    }
-
-    document.body.classList.toggle(
-        'dfEnabled',
-        dfPaneVisible === true
-    );
-
     document.documentElement.classList.toggle(
         'colorBlind',
         popupData.colorBlindFriendly === true
@@ -491,7 +531,7 @@ const renderPopup = function() {
     setGlobalExpand(popupData.firewallPaneMinimized === false, true);
 
     // Build dynamic filtering pane only if in use
-    if ( dfPaneVisible ) {
+    if ( (computedSections() & sectionFirewallBit) !== 0 ) {
         buildAllFirewallRows();
     }
 
@@ -504,24 +544,16 @@ const renderPopup = function() {
 //   Use tooltip for ARIA purpose.
 
 const renderTooltips = function(selector) {
-    for ( const entry of tooltipTargetSelectors ) {
-        if ( selector !== undefined && entry[0] !== selector ) { continue; }
+    for ( const [ key, details ] of tooltipTargetSelectors ) {
+        if ( selector !== undefined && key !== selector ) { continue; }
+        const elem = uDom.nodeFromSelector(key);
+        if ( elem.hasAttribute('title') === false ) { continue; }
         const text = vAPI.i18n(
-            entry[1].i18n +
-            (uDom.nodeFromSelector(entry[1].state) === null ? '1' : '2')
+            details.i18n +
+            (uDom.nodeFromSelector(details.state) === null ? '1' : '2')
         );
-        const elem = uDom.nodeFromSelector(entry[0]);
         elem.setAttribute('aria-label', text);
-        const tip = elem.querySelector('.tip');
-        if ( tip !== null ) {
-            tip.textContent = text;
-        } else {
-            elem.setAttribute('data-tip', text);
-        }
-        if ( tip === null && selector !== undefined ) {
-            uDom.nodeFromId('tooltip').textContent =
-                elem.getAttribute('data-tip');
-        }
+        elem.setAttribute('title', text);
     }
 };
 
@@ -531,6 +563,13 @@ const tooltipTargetSelectors = new Map([
         {
             state: 'body.off',
             i18n: 'popupPowerSwitchInfo',
+        }
+    ],
+    [
+        '#no-popups',
+        {
+            state: '#no-popups.on',
+            i18n: 'popupTipNoPopups'
         }
     ],
     [
@@ -575,23 +614,43 @@ let renderOnce = function() {
     if ( popupData.fontSize !== popupFontSize ) {
         popupFontSize = popupData.fontSize;
         if ( popupFontSize !== 'unset' ) {
-            body.style.setProperty('font-size', popupFontSize);
+            body.style.setProperty('--font-size', popupFontSize);
             vAPI.localStorage.setItem('popupFontSize', popupFontSize);
         } else {
-            body.style.removeProperty('font-size');
+            body.style.removeProperty('--font-size');
             vAPI.localStorage.removeItem('popupFontSize');
         }
     }
 
-    // https://github.com/uBlockOrigin/uBlock-issues/issues/22
-    if ( popupData.advancedUserEnabled !== true ) {
-        uDom('#firewall [data-i18n-tip][data-src]').removeAttr('data-tip');
+    uDom.nodeFromId('version').textContent = popupData.appVersion;
+
+    sectionBitsToAttribute(computedSections());
+
+    if ( popupData.uiPopupConfig !== undefined ) {
+        document.body.setAttribute('data-ui', popupData.uiPopupConfig);
     }
 
-    body.classList.toggle(
-        'no-tooltips',
-        popupData.tooltipsDisabled === true
-    );
+    body.classList.toggle('no-tooltips', popupData.tooltipsDisabled === true);
+    if ( popupData.tooltipsDisabled === true ) {
+        uDom('[title]').removeAttr('title');
+    }
+
+    // https://github.com/uBlockOrigin/uBlock-issues/issues/22
+    if ( popupData.advancedUserEnabled !== true ) {
+        uDom('#firewall [title][data-src]').removeAttr('title');
+    }
+
+    // This must be done the firewall is populated
+    if ( popupData.popupPanelHeightMode === 1 ) {
+        body.classList.add('vMin');
+    }
+
+    // Prevent non-advanced user opting into advanced user mode from harming
+    // themselves by disabling by default features generally suitable to
+    // filter list maintainers and actual advanced users.
+    if ( popupData.godMode ) {
+        body.classList.add('godMode');
+    }
 };
 
 /******************************************************************************/
@@ -713,35 +772,84 @@ const gotoURL = function(ev) {
 
 /******************************************************************************/
 
-const toggleFirewallPane = function() {
-    popupData.dfEnabled = !popupData.dfEnabled;
+// The popup panel is made of sections. Visiblity of sections can
+// be toggle on/off.
 
+const maxNumberOfSections = 6;
+const sectionFirewallBit = 0b10000;
+
+const computedSections = ( ) =>
+    popupData.popupPanelSections &
+   ~popupData.popupPanelDisabledSections |
+    popupData.popupPanelLockedSections;
+
+const sectionBitsFromAttribute = function() {
+    const attr = document.body.dataset.more;
+    if ( attr === '' ) { return 0; }
+    let bits = 0;
+    for ( const c of attr.split(' ') ) {
+        bits |= 1 << (c.charCodeAt(0) - 97);
+    }
+    return bits;
+};
+
+const sectionBitsToAttribute = function(bits) {
+    const attr = [];
+    for ( let i = 0; i < maxNumberOfSections; i++ ) {
+        const bit = 1 << i;
+        if ( (bits & bit) === 0 ) { continue; }
+        attr.push(String.fromCharCode(97 + i));
+    }
+    document.body.dataset.more = attr.join(' ');
+};
+
+const toggleSections = function(more) {
+    const offbits = ~popupData.popupPanelDisabledSections;
+    const onbits = popupData.popupPanelLockedSections;
+    let currentBits = sectionBitsFromAttribute();
+    let newBits = currentBits;
+    for ( let i = 0; i < maxNumberOfSections; i++ ) {
+        const bit = 1 << (more ? i : maxNumberOfSections - i - 1);
+        if ( more ) {
+            newBits |= bit;
+        } else {
+            newBits &= ~bit;
+        }
+        newBits = newBits & offbits | onbits;
+        if ( newBits !== currentBits ) { break; }
+    }
+    if ( newBits === currentBits ) { return; }
+
+    sectionBitsToAttribute(newBits);
+
+    popupData.popupPanelSections = newBits;
     messaging.send('popupPanel', {
         what: 'userSettings',
-        name: 'dynamicFilteringEnabled',
-        value: popupData.dfEnabled,
+        name: 'popupPanelSections',
+        value: newBits,
     });
 
     // https://github.com/chrisaljoudi/uBlock/issues/996
-    // Remember the last state of the firewall pane. This allows to
-    // configure the popup size early next time it is opened, which means a
-    // less glitchy popup at open time.
-    dfPaneVisibleStored = popupData.dfEnabled;
-    vAPI.localStorage.setItem('popupFirewallPane', dfPaneVisibleStored);
+    //   Remember the last state of the firewall pane. This allows to
+    //   configure the popup size early next time it is opened, which means a
+    //   less glitchy popup at open time.
+    vAPI.localStorage.setItem('popupPanelSections', newBits);
 
     // Dynamic filtering pane may not have been built yet
-    document.body.classList.toggle('dfEnabled', popupData.dfEnabled);
-    if ( popupData.dfEnabled && dfPaneBuilt === false ) {
+    if ( (newBits & sectionFirewallBit) !== 0 && dfPaneBuilt === false ) {
         buildAllFirewallRows();
     }
 };
 
+uDom('#moreButton').on('click', ( ) => { toggleSections(true); });
+uDom('#lessButton').on('click', ( ) => { toggleSections(false); });
+
 /******************************************************************************/
 
-const mouseenterCellHandler = function() {
-    if ( uDom(this).hasClass('ownRule') === false ) {
-        dfHotspots.appendTo(this);
-    }
+const mouseenterCellHandler = function(ev) {
+    const target = ev.target;
+    if ( target.classList.contains('ownRule') ) { return; }
+    target.appendChild(dfHotspots);
 };
 
 const mouseleaveCellHandler = function() {
@@ -793,7 +901,7 @@ const unsetFirewallRuleHandler = function(ev) {
         0,
         ev.ctrlKey || ev.metaKey
     );
-    dfHotspots.appendTo(cell);
+    cell.appendChild(dfHotspots);
 };
 
 /******************************************************************************/
@@ -986,7 +1094,7 @@ const toggleHostnameSwitch = async function(ev) {
         return;
     }
     target.classList.toggle('on');
-    renderTooltips('#' + switchName);
+    renderTooltips(`#${switchName}`);
 
     const response = await messaging.send('popupPanel', {
         what: 'toggleHostnameSwitch',
@@ -1001,6 +1109,34 @@ const toggleHostnameSwitch = async function(ev) {
     updateAllFirewallCells();
     hashFromPopupData();
 };
+
+/*******************************************************************************
+
+    Double tap ctrl key: toggle god mode
+
+*/
+
+{
+    let eventCount = 0;
+    let eventTime = 0;
+
+    document.addEventListener('keydown', ev => {
+        if ( ev.key !== 'Control' ) {
+            eventCount = 0;
+            return;
+        }
+        const now = Date.now();
+        if ( (now - eventTime) >= 500 ) {
+            eventCount = 0;
+        }
+        eventCount += 1;
+        eventTime = now;
+        if ( eventCount < 2 ) { return; }
+        eventCount = 0;
+        document.body.classList.toggle('godMode');
+    });
+}
+
 
 /******************************************************************************/
 
@@ -1083,32 +1219,53 @@ const getPopupData = async function(tabId) {
         tabId = parseInt(matches[1], 10) || 0;
     }
 
+    const nextFrames = async n => {
+        for ( let i = 0; i < n; i++ ) {
+            await new Promise(resolve => {
+                self.requestAnimationFrame(( ) => { resolve(); });
+            });
+        }
+    };
+
     // The purpose of the following code is to reset to a vertical layout
-    // should the viewport be not enough wide to accomodate the horizontal
+    // should the viewport not be enough wide to accomodate the horizontal
     // layout.
-    const checkViewport = function() {
+    // To avoid querying a spurious viewport width -- it happens sometimes,
+    // somehow -- we delay layout-changing operations to the next paint
+    // frames.
+    // Force a layout recalculation by querying the body width. To be
+    // honest, I have no clue if this makes a difference in the end.
+    //   https://gist.github.com/paulirish/5d52fb081b3570c81e3a
+    // Use a tolerance proportional to the sum of the width of the panes
+    // when testing against viewport width.
+    const checkViewport = async function() {
         const root = document.querySelector(':root');
         if ( root.classList.contains('desktop') ) {
+            await nextFrames(4);
             const main = document.getElementById('main');
             const firewall = document.getElementById('firewall');
-            const minWidth = Math.floor(main.offsetWidth + firewall.offsetWidth);
-            if ( document.body.offsetWidth < minWidth ) {
-                root.classList.remove('desktop');
-            } else {
-                const sticky = document.getElementById('sticky');
-                if ( sticky.parentElement !== main ) {
-                    main.prepend(sticky);
-                }
+            const minWidth = (main.offsetWidth + firewall.offsetWidth) / 1.1;
+            if ( window.innerWidth < minWidth ) {
+                root.classList.add('portrait');
+            }
+        } else if ( root.classList.contains('mobile') ) {
+            root.classList.add('portrait');
+        }
+        if ( root.classList.contains('portrait') ) {
+            const panes = document.getElementById('panes');
+            const sticky = document.getElementById('sticky');
+            const stickyParent = sticky.parentElement;
+            if ( stickyParent !== panes ) {
+                panes.prepend(sticky);
             }
         }
-        self.requestAnimationFrame(( ) => {
-            document.body.classList.remove('loading');
-        });
+        await nextFrames(1);
+        document.body.classList.remove('loading');
     };
 
     getPopupData(tabId).then(( ) => {
         if ( document.readyState !== 'complete' ) {
-            self.addEventListener('load', checkViewport, { once: true });
+            self.addEventListener('load', ( ) => { checkViewport(); }, { once: true });
         } else {
             checkViewport();
         }
@@ -1118,7 +1275,6 @@ const getPopupData = async function(tabId) {
 uDom('#switch').on('click', toggleNetFilteringSwitch);
 uDom('#gotoZap').on('click', gotoZap);
 uDom('#gotoPick').on('click', gotoPick);
-uDom('#moreButton').on('click', toggleFirewallPane);
 uDom('.hnSwitch').on('click', ev => { toggleHostnameSwitch(ev); });
 uDom('#saveRules').on('click', saveFirewallRules);
 uDom('#revertRules').on('click', ( ) => { revertFirewallRules(); });

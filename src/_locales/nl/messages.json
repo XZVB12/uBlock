@@ -85,7 +85,7 @@
   },
   "popupBlockedStats": {
     "message": "{{count}} of {{percent}}%",
-    "description": "Example: 15 or 13%"
+    "description": "Example: 15 (13%)"
   },
   "popupBlockedSinceInstallPrompt": {
     "message": "sinds installatie",
@@ -112,11 +112,11 @@
     "description": "English: Click to open the dashboard"
   },
   "popupTipZapper": {
-    "message": "Elementwissermodus openen",
+    "message": "Element&shy;wisser&shy;modus openen",
     "description": "Tooltip for the element-zapper icon in the popup panel"
   },
   "popupTipPicker": {
-    "message": "Elementkiezermodus openen",
+    "message": "Element&shy;kiezer&shy;modus openen",
     "description": "English: Enter element picker mode"
   },
   "popupTipLog": {
@@ -179,25 +179,33 @@
     "message": "Klik om JavaScript op deze website niet meer uit te schakelen",
     "description": "Tooltip for the no-scripting per-site switch"
   },
+  "popupNoPopups_v2": {
+    "message": "Pop-upvensters",
+    "description": "Caption for the no-popups per-site switch"
+  },
   "popupNoLargeMedia_v2": {
     "message": "Grote media-elementen",
-    "description": "Tip for the no-large-media per-site switch"
+    "description": "Caption for the no-large-media per-site switch"
   },
   "popupNoCosmeticFiltering_v2": {
     "message": "Cosmetische filters",
-    "description": "Tip for the no-cosmetic-filtering per-site switch"
+    "description": "Caption for the no-cosmetic-filtering per-site switch"
   },
   "popupNoRemoteFonts_v2": {
     "message": "Externe lettertypen",
-    "description": "Tip for the no-remote-fonts per-site switch"
+    "description": "Caption for the no-remote-fonts per-site switch"
   },
   "popupNoScripting_v2": {
     "message": "JavaScript",
-    "description": "Tip for the no-scripting per-site switch"
+    "description": "Caption for the no-scripting per-site switch"
   },
   "popupMoreButton_v2": {
     "message": "Meer",
-    "description": "Label to be used to toggle overview panel"
+    "description": "Label to be used to show popup panel sections"
+  },
+  "popupLessButton_v2": {
+    "message": "Minder",
+    "description": "Label to be used to hide popup panel sections"
   },
   "popupTipGlobalRules": {
     "message": "Algemene regels: deze kolom is voor regels die op alle websites van toepassing zijn.",
@@ -254,6 +262,10 @@
   "popupHitDomainCount": {
     "message": "{{count}} van {{total}}",
     "description": "appears in popup"
+  },
+  "popupVersion": {
+    "message": "Versie",
+    "description": "Example of use: Version 1.26.4"
   },
   "pickerCreate": {
     "message": "Aanmaken",

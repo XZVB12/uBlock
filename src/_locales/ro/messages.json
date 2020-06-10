@@ -85,7 +85,7 @@
   },
   "popupBlockedStats": {
     "message": "{{count}} sau {{percent}}%",
-    "description": "Example: 15 or 13%"
+    "description": "Example: 15 (13%)"
   },
   "popupBlockedSinceInstallPrompt": {
     "message": "de la instalare",
@@ -179,25 +179,33 @@
     "message": "Apasă pentru a nu mai dezactiva JavaScript pe acest site",
     "description": "Tooltip for the no-scripting per-site switch"
   },
+  "popupNoPopups_v2": {
+    "message": "Ferestre suprapuse",
+    "description": "Caption for the no-popups per-site switch"
+  },
   "popupNoLargeMedia_v2": {
     "message": "Elemente media mari",
-    "description": "Tip for the no-large-media per-site switch"
+    "description": "Caption for the no-large-media per-site switch"
   },
   "popupNoCosmeticFiltering_v2": {
     "message": "Filtre vizuale",
-    "description": "Tip for the no-cosmetic-filtering per-site switch"
+    "description": "Caption for the no-cosmetic-filtering per-site switch"
   },
   "popupNoRemoteFonts_v2": {
     "message": "Fonturi externe",
-    "description": "Tip for the no-remote-fonts per-site switch"
+    "description": "Caption for the no-remote-fonts per-site switch"
   },
   "popupNoScripting_v2": {
     "message": "JavaScript",
-    "description": "Tip for the no-scripting per-site switch"
+    "description": "Caption for the no-scripting per-site switch"
   },
   "popupMoreButton_v2": {
     "message": "Mai multe",
-    "description": "Label to be used to toggle overview panel"
+    "description": "Label to be used to show popup panel sections"
+  },
+  "popupLessButton_v2": {
+    "message": "Mai puțin",
+    "description": "Label to be used to hide popup panel sections"
   },
   "popupTipGlobalRules": {
     "message": "Reguli globale: această coloană este pentru regulile care se aplică tuturor site-urilor.",
@@ -254,6 +262,10 @@
   "popupHitDomainCount": {
     "message": "{{count}} din {{total}}",
     "description": "appears in popup"
+  },
+  "popupVersion": {
+    "message": "Versiune",
+    "description": "Example of use: Version 1.26.4"
   },
   "pickerCreate": {
     "message": "Creează",
@@ -600,7 +612,7 @@
     "description": "Tooltip for the popup panel button in the logger page"
   },
   "loggerInfoTip": {
-    "message": "uBlock Origin wiki: Jurnalierul",
+    "message": "uBlock Origin wiki: Jurnal",
     "description": "Tooltip for the top-right info label in the logger page"
   },
   "loggerClearTip": {
@@ -828,15 +840,15 @@
     "description": "English: Contributors"
   },
   "aboutSourceCode": {
-    "message": "Source code",
+    "message": "Cod sursă",
     "description": "Link text to source code repo"
   },
   "aboutTranslations": {
-    "message": "Translations",
+    "message": "Traduceri:",
     "description": "Link text to translations repo"
   },
   "aboutFilterLists": {
-    "message": "Filter lists",
+    "message": "Liste de filtre",
     "description": "Link text to uBO's own filter lists repo"
   },
   "aboutDependencies": {
