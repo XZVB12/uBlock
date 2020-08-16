@@ -387,10 +387,13 @@ self.addEventListener('hiddenSettingsChanged', ( ) => {
         this.hiddenSettings.autoCommentFilterTemplate.indexOf('{{') !== -1
     ) {
         const d = new Date();
+        // Date in YYYY-MM-DD format - https://stackoverflow.com/a/50130338
+        const ISO8061Date = new Date(d.getTime() +
+            (d.getTimezoneOffset()*60000)).toISOString().split('T')[0];
         comment =
             '! ' +
             this.hiddenSettings.autoCommentFilterTemplate
-                .replace('{{date}}', d.toLocaleDateString())
+                .replace('{{date}}', ISO8061Date)
                 .replace('{{time}}', d.toLocaleTimeString())
                 .replace('{{origin}}', options.origin);
     }
@@ -532,7 +535,7 @@ self.addEventListener('hiddenSettingsChanged', ( ) => {
         vAPI.storage.get('availableFilterLists'),
         this.assets.metadata(),
     ]);
-    
+
     oldAvailableLists = bin && bin.availableFilterLists || {};
 
     for ( const assetKey in entries ) {
@@ -760,12 +763,15 @@ self.addEventListener('hiddenSettingsChanged', ( ) => {
     // Extract update frequency information
     const matches = head.match(/(?:^|\n)(?:!|# )[\t ]*Expires[\t ]*:[\t ]*(\d+)[\t ]*(h)?/i);
     if ( matches !== null ) {
-        let v = Math.max(parseInt(matches[1], 10), 1);
-        if ( matches[2] !== undefined ) {
-            v = Math.ceil(v / 24);
-        }
-        if ( v !== listEntry.updateAfter ) {
-            this.assets.registerAssetSource(assetKey, { updateAfter: v });
+        let v = parseInt(matches[1], 10);
+        if ( isNaN(v) === false ) {
+            if ( matches[2] !== undefined ) {
+                v = Math.ceil(v / 24);
+            }
+            v = Math.max(v, 1);
+            if ( v !== listEntry.updateAfter ) {
+                this.assets.registerAssetSource(assetKey, { updateAfter: v });
+            }
         }
     }
 };
@@ -799,7 +805,7 @@ self.addEventListener('hiddenSettingsChanged', ( ) => {
     //    https://adblockplus.org/en/filters
     const staticNetFilteringEngine = this.staticNetFilteringEngine;
     const staticExtFilteringEngine = this.staticExtFilteringEngine;
-    const lineIter = new this.LineIterator(this.processDirectives.prune(rawText));
+    const lineIter = new this.LineIterator(this.preparseDirectives.prune(rawText));
     const parser = new vAPI.StaticFilteringParser();
 
     parser.setMaxTokenLength(this.urlTokenizer.MAX_TOKEN_LENGTH);
@@ -825,7 +831,7 @@ self.addEventListener('hiddenSettingsChanged', ( ) => {
 
         // https://github.com/gorhill/uBlock/issues/2599
         //   convert hostname to punycode if needed
-        if ( parser.patternHasUnicode() && parser.toPunycode() === false ) {
+        if ( parser.patternHasUnicode() && parser.toASCII() === false ) {
             continue;
         }
         staticNetFilteringEngine.compile(parser, writer);
@@ -854,11 +860,12 @@ self.addEventListener('hiddenSettingsChanged', ( ) => {
 
 // https://github.com/AdguardTeam/AdguardBrowserExtension/issues/917
 
-µBlock.processDirectives = {
+µBlock.preparseDirectives = {
     // This method returns an array of indices, corresponding to position in
     // the content string which should alternatively be parsed and discarded.
     split: function(content) {
         const reIf = /^!#(if|endif)\b([^\n]*)(?:[\n\r]+|$)/gm;
+        const soup = vAPI.webextFlavor.soup;
         const stack = [];
         const shouldDiscard = ( ) => stack.some(v => v);
         const parts = [ 0 ];
@@ -875,10 +882,8 @@ self.addEventListener('hiddenSettingsChanged', ( ) => {
                 if ( target ) { expr = expr.slice(1); }
                 const token = this.tokens.get(expr);
                 const startDiscard =
-                    token === 'false' &&
-                        target === false ||
-                    token !== undefined &&
-                        vAPI.webextFlavor.soup.has(token) === target;
+                    token === 'false' && target === false ||
+                    token !== undefined && soup.has(token) === target;
                 if ( discard === false && startDiscard ) {
                     parts.push(match.index);
                     discard = true;
@@ -915,6 +920,26 @@ self.addEventListener('hiddenSettingsChanged', ( ) => {
         return out.join('\n');
     },
 
+    getHints: function() {
+        const out = [];
+        const vals = new Set();
+        for ( const [ key, val ] of this.tokens ) {
+            if ( vals.has(val) ) { continue; }
+            vals.add(val);
+            out.push(key);
+        }
+        return out;
+    },
+
+    getTokens: function() {
+        const out = new Map();
+        const soup = vAPI.webextFlavor.soup;
+        for ( const [ key, val ] of this.tokens ) {
+            out.set(key, val !== 'false' && soup.has(val));
+        }
+        return Array.from(out);
+    },
+
     tokens: new Map([
         [ 'ext_ublock', 'ublock' ],
         [ 'env_chromium', 'chromium' ],
@@ -926,6 +951,23 @@ self.addEventListener('hiddenSettingsChanged', ( ) => {
         [ 'cap_html_filtering', 'html_filtering' ],
         [ 'cap_user_stylesheet', 'user_stylesheet' ],
         [ 'false', 'false' ],
+        // Hoping ABP-only list maintainers can at least make use of it to
+        // help non-ABP content blockers better deal with filters benefiting
+        // only ABP.
+        [ 'ext_abp', 'false' ],
+        // Compatibility with other blockers
+        // https://kb.adguard.com/en/general/how-to-create-your-own-ad-filters#adguard-specific
+        [ 'adguard', 'adguard' ],
+        [ 'adguard_app_android', 'false' ],
+        [ 'adguard_app_ios', 'false' ],
+        [ 'adguard_app_mac', 'false' ],
+        [ 'adguard_app_windows', 'false' ],
+        [ 'adguard_ext_android_cb', 'false' ],
+        [ 'adguard_ext_chromium', 'chromium' ],
+        [ 'adguard_ext_edge', 'edge' ],
+        [ 'adguard_ext_firefox', 'firefox' ],
+        [ 'adguard_ext_opera', 'chromium' ],
+        [ 'adguard_ext_safari', 'false' ],
     ]),
 };
 

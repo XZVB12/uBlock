@@ -524,11 +524,15 @@ const µb = µBlock;
 
 const retrieveContentScriptParameters = function(senderDetails, request) {
     if ( µb.readyToFilter !== true ) { return; }
-    const { url, tabId, frameId } = senderDetails;
-    if ( url === undefined || tabId === undefined || frameId === undefined ) {
+    const { url: senderURL, tabId, frameId } = senderDetails;
+    if (
+        tabId === undefined ||
+        frameId === undefined ||
+        senderURL === undefined ||
+        senderURL !== request.url && senderURL.startsWith('about:') === false
+    ) {
         return;
     }
-    if ( request.url !== url ) { return; }
     const pageStore = µb.pageStoreFromTabId(tabId);
     if ( pageStore === null || pageStore.getNetFilteringSwitch() === false ) {
         return;
@@ -714,7 +718,7 @@ const onMessage = function(request, sender, callback) {
         xhr.responseType = 'text';
         xhr.onload = function() {
             this.onload = null;
-            var i18n = {
+            const i18n = {
                 bidi_dir: document.body.getAttribute('dir'),
                 create: vAPI.i18n('pickerCreate'),
                 pick: vAPI.i18n('pickerPick'),
@@ -794,6 +798,33 @@ vAPI.messaging.listen({
 {
 // >>>>> start of local scope
 
+const fromBase64 = function(encoded) {
+    if ( typeof encoded !== 'string' ) {
+        return Promise.resolve(encoded);
+    }
+    let u8array;
+    try {
+        u8array = µBlock.denseBase64.decode(encoded);
+    } catch(ex) {
+    }
+    return Promise.resolve(u8array !== undefined ? u8array : encoded);
+};
+
+const toBase64 = function(data) {
+    const value = data instanceof Uint8Array
+        ? µBlock.denseBase64.encode(data)
+        : data;
+    return Promise.resolve(value);
+};
+
+const compress = function(json) {
+    return µBlock.lz4Codec.encode(json, toBase64);
+};
+
+const decompress = function(encoded) {
+    return µBlock.lz4Codec.decode(encoded, fromBase64);
+};
+
 const onMessage = function(request, sender, callback) {
     // Cloud storage support is optional.
     if ( µBlock.cloudStorageSupported !== true ) {
@@ -815,12 +846,21 @@ const onMessage = function(request, sender, callback) {
         return;
 
     case 'cloudPull':
-        return vAPI.cloud.pull(request.datakey).then(result => {
+        request.decode = decompress;
+        return vAPI.cloud.pull(request).then(result => {
             callback(result);
         });
 
     case 'cloudPush':
-        return vAPI.cloud.push(request.datakey, request.data).then(result => {
+        if ( µBlock.hiddenSettings.cloudStorageCompression ) {
+            request.encode = compress;
+        }
+        return vAPI.cloud.push(request).then(result => {
+            callback(result);
+        });
+
+    case 'cloudUsed':
+        return vAPI.cloud.used(request.datakey).then(result => {
             callback(result);
         });
 
@@ -1151,8 +1191,12 @@ const onMessage = function(request, sender, callback) {
         response = µb.canUpdateShortcuts;
         break;
 
-    case 'getResourceDetails':
-        response = µb.redirectEngine.getResourceDetails();
+    case 'getAutoCompleteDetails':
+        response = {
+            redirectResources: µb.redirectEngine.getResourceDetails(),
+            preparseDirectiveTokens: µb.preparseDirectives.getTokens(),
+            preparseDirectiveHints: µb.preparseDirectives.getHints(),
+        };
         break;
 
     case 'getRules':
