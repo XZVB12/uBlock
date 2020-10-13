@@ -56,6 +56,16 @@ window.addEventListener('webextFlavor', function() {
 
 /******************************************************************************/
 
+vAPI.randomToken = function() {
+    const n = Math.random();
+    return String.fromCharCode(n * 26 + 97) +
+        Math.floor(
+            (0.25 + n * 0.75) * Number.MAX_SAFE_INTEGER
+        ).toString(36).slice(-8);
+};
+
+/******************************************************************************/
+
 vAPI.app = {
     name: manifest.name.replace(/ dev\w+ build/, ''),
     version: (( ) => {
@@ -339,7 +349,10 @@ vAPI.Tabs = class {
         return tabs.length !== 0 ? tabs[0] : null;
     }
 
-    async insertCSS() {
+    async insertCSS(tabId, details) {
+        if ( vAPI.supportsUserStylesheets ) {
+            details.cssOrigin = 'user';
+        }
         try {
             await webext.tabs.insertCSS(...arguments);
         }
@@ -357,7 +370,10 @@ vAPI.Tabs = class {
         return Array.isArray(tabs) ? tabs : [];
     }
 
-    async removeCSS() {
+    async removeCSS(tabId, details) {
+        if ( vAPI.supportsUserStylesheets ) {
+            details.cssOrigin = 'user';
+        }
         try {
             await webext.tabs.removeCSS(...arguments);
         }
@@ -1003,9 +1019,6 @@ vAPI.messaging = {
                 frameId: sender.frameId,
                 matchAboutBlank: true
             };
-            if ( vAPI.supportsUserStylesheets ) {
-                details.cssOrigin = 'user';
-            }
             if ( msg.add ) {
                 details.runAt = 'document_start';
             }
@@ -1014,11 +1027,9 @@ vAPI.messaging = {
                 details.code = cssText;
                 promises.push(vAPI.tabs.insertCSS(tabId, details));
             }
-            if ( typeof webext.tabs.removeCSS === 'function' ) {
-                for ( const cssText of msg.remove ) {
-                    details.code = cssText;
-                    promises.push(vAPI.tabs.removeCSS(tabId, details));
-                }
+            for ( const cssText of msg.remove ) {
+                details.code = cssText;
+                promises.push(vAPI.tabs.removeCSS(tabId, details));
             }
             Promise.all(promises).then(( ) => {
                 callback();
@@ -1424,27 +1435,10 @@ vAPI.localStorage = {
         if ( this.cache instanceof Promise ) { return this.cache; }
         if ( this.cache instanceof Object ) { return this.cache; }
         this.cache = webext.storage.local.get('localStorage').then(bin => {
-            this.cache = undefined;
-            try {
-                if (
-                    bin instanceof Object === false ||
-                    bin.localStorage instanceof Object === false
-                ) {
-                    this.cache = {};
-                    const ls = self.localStorage;
-                    for ( let i = 0; i < ls.length; i++ ) {
-                        const key = ls.key(i);
-                        this.cache[key] = ls.getItem(key);
-                    }
-                    webext.storage.local.set({ localStorage: this.cache });
-                } else {
-                    this.cache = bin.localStorage;
-                }
-            } catch(ex) {
-            }
-            if ( this.cache instanceof Object === false ) {
-                this.cache = {};
-            }
+            this.cache = bin instanceof Object &&
+                bin.localStorage instanceof Object
+                    ? bin.localStorage
+                    : {};
         });
         return this.cache;
     },
@@ -1522,8 +1516,6 @@ vAPI.cloud = (( ) => {
         maxChunkSize = evalMaxChunkSize();
     }, { once: true });
 
-    const maxStorageSize = QUOTA_BYTES;
-
     const options = {
         defaultDeviceName: window.navigator.platform,
         deviceName: undefined,
@@ -1559,16 +1551,10 @@ vAPI.cloud = (( ) => {
         return chunkCount;
     };
 
-    const deleteChunks = function(datakey, start) {
+    const deleteChunks = async function(datakey, start) {
         const keys = [];
 
-        // No point in deleting more than:
-        // - The max number of chunks per item
-        // - The max number of chunks per storage limit
-        const n = Math.min(
-            maxChunkCountPerItem,
-            Math.ceil(maxStorageSize / maxChunkSize)
-        );
+        const n = await getCoarseChunkCount(datakey);
         for ( let i = start; i < n; i++ ) {
             keys.push(datakey + i.toString());
         }
@@ -1579,6 +1565,12 @@ vAPI.cloud = (( ) => {
 
     const push = async function(details) {
         const { datakey, data, encode } = details;
+        if (
+            data === undefined ||
+            typeof data === 'string' && data === ''
+        ) {
+            return deleteChunks(datakey, 0);
+        }
         const item = {
             source: options.deviceName || options.defaultDeviceName,
             tstamp: Date.now(),
@@ -1602,14 +1594,20 @@ vAPI.cloud = (( ) => {
         }
         bin[datakey + chunkCount.toString()] = ''; // Sentinel
 
+        // Remove potentially unused trailing chunks before storing the data,
+        // this will free storage space which could otherwise cause the push
+        // operation to fail.
+        try {
+            await deleteChunks(datakey, chunkCount + 1);
+        } catch (reason) {
+        }
+
+        // Push the data to browser-provided cloud storage.
         try {
             await webext.storage.sync.set(bin);
         } catch (reason) {
             return String(reason);
         }
-
-        // Remove potentially unused trailing chunks
-        deleteChunks(datakey, chunkCount);
     };
 
     const pull = async function(details) {

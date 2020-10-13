@@ -44,22 +44,33 @@ CodeMirror.defineMode('ubo-static-filtering', function() {
     if ( StaticFilteringParser instanceof Object === false ) { return; }
     const parser = new StaticFilteringParser({ interactive: true });
 
+    const reURL = /\bhttps?:\/\/\S+/;
     const rePreparseDirectives = /^!#(?:if|endif|include )\b/;
     const rePreparseIfDirective = /^(!#if ?)(.*)$/;
     let parserSlot = 0;
     let netOptionValueMode = false;
 
     const colorCommentSpan = function(stream) {
-        if ( rePreparseDirectives.test(stream.string) === false ) {
+        const { string, pos } = stream;
+        if ( rePreparseDirectives.test(string) === false ) {
+            const match = reURL.exec(string.slice(pos));
+            if ( match !== null ) {
+                if ( match.index === 0 ) {
+                    stream.pos += match[0].length;
+                    return 'comment link';
+                }
+                stream.pos += match.index;
+                return 'comment';
+            }
             stream.skipToEnd();
             return 'comment';
         }
-        const match = rePreparseIfDirective.exec(stream.string);
+        const match = rePreparseIfDirective.exec(string);
         if ( match === null ) {
             stream.skipToEnd();
             return 'variable strong';
         }
-        if ( stream.pos < match[1].length ) {
+        if ( pos < match[1].length ) {
             stream.pos += match[1].length;
             return 'variable strong';
         }
@@ -95,19 +106,29 @@ CodeMirror.defineMode('ubo-static-filtering', function() {
     };
 
     const colorExtScriptletPatternSpan = function(stream) {
+        const { pos, string } = stream;
         const { i, len } = parser.patternSpan;
-        if ( stream.pos === parser.slices[i+1] ) {
-            stream.pos += 4;
+        const patternBeg = parser.slices[i+1];
+        if ( pos === patternBeg ) {
+            stream.pos = pos + 4;
             return 'def';
         }
         if ( len > 3 ) {
+            if ( pos === patternBeg + 4 ) {
+                const match = /^[^,)]+/.exec(string.slice(pos));
+                const token = match && match[0].trim();
+                if ( token && scriptletNames.has(token) === false ) {
+                    stream.pos = pos + match[0].length;
+                    return 'warning';
+                }
+            }
             const r = parser.slices[i+len+1] - 1;
-            if ( stream.pos < r ) {
+            if ( pos < r ) {
                 stream.pos = r;
                 return 'variable';
             }
-            if ( stream.pos === r ) {
-                stream.pos += 1;
+            if ( pos === r ) {
+                stream.pos = pos + 1;
                 return 'def';
             }
         }
@@ -154,6 +175,56 @@ CodeMirror.defineMode('ubo-static-filtering', function() {
         }
         stream.skipToEnd();
         return null;
+    };
+
+    const colorNetOptionValueSpan = function(stream, bits) {
+        const { pos, string } = stream;
+        let style;
+        // Warn about unknown redirect tokens.
+        if (
+            string.charCodeAt(pos - 1) === 0x3D /* '=' */ &&
+            /[$,]redirect(-rule)?=$/.test(string.slice(0, pos))
+        ) {
+            style = 'value';
+            let end = parser.skipUntil(
+                parserSlot,
+                parser.commentSpan.i,
+                parser.BITComma
+            );
+            const token = parser.strFromSlices(parserSlot, end - 3);
+            if ( redirectNames.has(token) === false ) {
+                style += ' warning';
+            }
+            stream.pos += token.length;
+            parserSlot = end;
+            return style;
+        }
+        if ( (bits & parser.BITTilde) !== 0 ) {
+            style = 'keyword strong';
+        } else if ( (bits & parser.BITPipe) !== 0 ) {
+            style = 'def';
+        }
+        stream.pos += parser.slices[parserSlot+2];
+        parserSlot += 3;
+        return style || 'value';
+    };
+
+    const colorNetOptionSpan = function(stream) {
+        const bits = parser.slices[parserSlot];
+        let style;
+        if ( (bits & parser.BITComma) !== 0  ) {
+            style = 'def strong';
+            netOptionValueMode = false;
+        } else if ( netOptionValueMode ) {
+            return colorNetOptionValueSpan(stream, bits);
+        } else if ( (bits & parser.BITTilde) !== 0 ) {
+            style = 'keyword strong';
+        } else if ( (bits & parser.BITEqual) !== 0 ) {
+            netOptionValueMode = true;
+        }
+        stream.pos += parser.slices[parserSlot+2];
+        parserSlot += 3;
+        return style || 'def';
     };
 
     const colorNetSpan = function(stream) {
@@ -215,23 +286,7 @@ CodeMirror.defineMode('ubo-static-filtering', function() {
             parserSlot >= parser.optionsSpan.i &&
             parserSlot < parser.commentSpan.i
         ) {
-            const bits = parser.slices[parserSlot];
-            let style;
-            if ( (bits & parser.BITComma) !== 0  ) {
-                style = 'def strong';
-                netOptionValueMode = false;
-            } else if ( (bits & parser.BITTilde) !== 0 ) {
-                style = 'keyword strong';
-            } else if ( (bits & parser.BITPipe) !== 0 ) {
-                style = 'def';
-            } else if ( netOptionValueMode ) {
-                style = 'value';
-            } else if ( (bits & parser.BITEqual) !== 0 ) {
-                netOptionValueMode = true;
-            }
-            stream.pos += parser.slices[parserSlot+2];
-            parserSlot += 3;
-            return style || 'def';
+            return colorNetOptionSpan(stream);
         }
         if (
             parserSlot >= parser.commentSpan.i &&
@@ -277,7 +332,7 @@ CodeMirror.defineMode('ubo-static-filtering', function() {
         token: function(stream) {
             if ( stream.sol() ) {
                 parser.analyze(stream.string);
-                parser.analyzeExtra(stream.string);
+                parser.analyzeExtra();
                 parserSlot = 0;
                 netOptionValueMode = false;
             }
@@ -483,7 +538,6 @@ const initHints = function() {
 /******************************************************************************/
 
 CodeMirror.registerHelper('fold', 'ubo-static-filtering', (( ) => {
-
     const foldIfEndif = function(startLineNo, startLine, cm) {
         const lastLineNo = cm.lastLine();
         let endLineNo = startLineNo;
@@ -536,6 +590,58 @@ CodeMirror.registerHelper('fold', 'ubo-static-filtering', (( ) => {
         }
     };
 })());
+
+/******************************************************************************/
+
+// Enhanced word selection
+
+{
+    const Pass = CodeMirror.Pass;
+
+    const selectWordAt = function(cm, pos) {
+        const { line, ch } = pos;
+
+        // Leave current selection alone
+        if ( cm.somethingSelected() ) {
+            const from = cm.getCursor('from');
+            const to = cm.getCursor('to');
+            if (
+                (line > from.line || line === from.line && ch > from.ch) &&
+                (line < to.line || line === to.line && ch < to.ch)
+            ) {
+                return Pass;
+            }
+        }
+
+        const s = cm.getLine(line);
+        const token = cm.getTokenTypeAt(pos);
+        let lmatch, rmatch;
+        let select = false;
+
+        // Select URL in comments
+        if ( token === 'comment link' ) {
+            lmatch = /\S+$/.exec(s.slice(0, ch));
+            rmatch = /^\S+/.exec(s.slice(ch));
+            select = lmatch !== null && rmatch !== null &&
+                     /^https?:\/\//.test(s.slice(lmatch.index));
+        }
+
+        // TODO: add more convenient word-matching cases here
+        // if ( select === false ) { ... }
+
+        if ( select === false ) { return Pass; }
+        cm.setSelection(
+            { line, ch: lmatch.index },
+            { line, ch: ch + rmatch.index + rmatch[0].length }
+        );
+    };
+
+    CodeMirror.defineInitHook(cm => {
+        cm.addKeyMap({
+            'LeftDoubleClick': selectWordAt,
+        });
+    });
+}
 
 /******************************************************************************/
 

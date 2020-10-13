@@ -77,6 +77,7 @@ const µBlock = (( ) => { // jshint ignore:line
         uiPopupConfig: 'undocumented',
         uiFlavor: 'unset',
         uiStyles: 'unset',
+        uiTheme: 'unset',
         updateAssetBypassBrowserCache: false,
         userResourcesLocation: 'unset',
     };
@@ -138,8 +139,8 @@ const µBlock = (( ) => { // jshint ignore:line
 
         // Read-only
         systemSettings: {
-            compiledMagic: 28,  // Increase when compiled format changes
-            selfieMagic: 28,    // Increase when selfie format changes
+            compiledMagic: 29,  // Increase when compiled format changes
+            selfieMagic: 29,    // Increase when selfie format changes
         },
 
         // https://github.com/uBlockOrigin/uBlock-issues/issues/759#issuecomment-546654501
@@ -171,6 +172,7 @@ const µBlock = (( ) => { // jshint ignore:line
 
         selectedFilterLists: [],
         availableFilterLists: {},
+        badLists: new Map(),
 
         // https://github.com/uBlockOrigin/uBlock-issues/issues/974
         //   This can be used to defer filtering decision-making.

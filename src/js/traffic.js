@@ -101,7 +101,7 @@ const onBeforeRequest = function(details) {
             details.type === 'sub_frame' &&
             details.aliasURL === undefined
         ) {
-            pageStore.setFrame(details.frameId, details.url);
+            pageStore.setFrameURL(details.frameId, details.url);
         }
         if ( result === 2 ) {
             return { cancel: false };
@@ -111,22 +111,16 @@ const onBeforeRequest = function(details) {
 
     // Blocked
 
-    // https://github.com/gorhill/uBlock/issues/949
-    //   Redirect blocked request?
-    if ( µb.hiddenSettings.ignoreRedirectFilters !== true ) {
-        const url = µb.redirectEngine.toURL(fctxt);
-        if ( url !== undefined ) {
-            pageStore.internalRedirectionCount += 1;
-            if ( µb.logger.enabled ) {
-                fctxt.setRealm('redirect')
-                     .setFilter({ source: 'redirect', raw: µb.redirectEngine.resourceNameRegister })
-                     .toLogger();
-            }
-            return { redirectUrl: url };
-        }
+    if ( fctxt.redirectURL === undefined ) {
+        return { cancel: true };
     }
 
-    return { cancel: true };
+    if ( µb.logger.enabled ) {
+        fctxt.setRealm('redirect')
+             .setFilter({ source: 'redirect', raw: µb.redirectEngine.resourceNameRegister })
+             .toLogger();
+    }
+    return { redirectUrl: fctxt.redirectURL };
 };
 
 /******************************************************************************/

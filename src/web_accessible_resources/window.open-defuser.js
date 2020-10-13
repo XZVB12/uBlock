@@ -27,7 +27,7 @@
     if ( arg2 === '{{2}}' ) { arg2 = ''; }
     let arg3 = '{{3}}';
     if ( arg3 === '{{3}}' ) { arg3 = ''; }
-    const log = arg3 !== ''
+    const log = /\blog\b/.test(arg3)
         ? console.log.bind(console)
         : ( ) => { };
     const newSyntax = /^[01]?$/.test(arg1) === false;
@@ -77,20 +77,39 @@
                 return target.apply(thisArg, args);
             }
             if ( autoRemoveAfter < 0 ) { return null; }
-            const decoy1 = createDecoy('iframe', 'src', url);
-            const decoy2 = createDecoy('object', 'data', url);
-            const popup = decoy1.contentWindow || decoy2.contentWindow;
-            if ( arg3 === '' ) { return popup; }
-            return new Proxy(popup, {
-                get: function(target, prop) {
-                    log('window.open / get', prop, '===', target[prop]);
-                    return target[prop];
-                },
-                set: function(target, prop, value) {
-                    log('window.open / set', prop, '=', value);
-                    target[prop] = value;
-                },
-            });
+            const decoy = /\bobj\b/.test(arg3)
+                ? createDecoy('object', 'data', url)
+                : createDecoy('iframe', 'src', url);
+            let popup = decoy.contentWindow;
+            if ( typeof popup === 'object' && popup !== null ) {
+                Object.defineProperty(popup, 'closed', { value: false });
+            } else {
+                const noopFunc = (function(){}).bind(self);
+                popup = new Proxy(self, {
+                    get: function(target, prop) {
+                        if ( prop === 'closed' ) { return false; }
+                        const r = Reflect.get(...arguments);
+                        if ( typeof r === 'function' ) { return noopFunc; }
+                        return target[prop];
+                    },
+                    set: function() {
+                        return Reflect.set(...arguments);
+                    },
+                });
+            }
+            if ( /\blog\b/.test(arg3) ) {
+                popup = new Proxy(popup, {
+                    get: function(target, prop) {
+                        log('window.open / get', prop, '===', target[prop]);
+                        return Reflect.get(...arguments);
+                    },
+                    set: function(target, prop, value) {
+                        log('window.open / set', prop, '=', value);
+                        return Reflect.set(...arguments);
+                    },
+                });
+            }
+            return popup;
         }
     });
 })();

@@ -16,6 +16,14 @@
 			"assets/thirdparties/publicsuffix.org/list/effective_tld_names.dat"
 		]
 	},
+	"ublock-badlists": {
+		"content": "internal",
+		"updateAfter": 13,
+		"contentURL": [
+			"https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/badlists.txt",
+			"assets/ublock/badlists.txt"
+		]
+	},
 	"ublock-filters": {
 		"content": "filters",
 		"group": "default",
@@ -139,7 +147,8 @@
 		"group": "malware",
 		"title": "Online Malicious URL Blocklist",
 		"contentURL": [
-			"https://gitlab.com/curben/urlhaus-filter/raw/master/urlhaus-filter-online.txt",
+			"https://curben.gitlab.io/malware-filter/urlhaus-filter-online.txt",
+			"https://raw.githubusercontent.com/curbengh/urlhaus-filter/master/urlhaus-filter-online.txt",
 			"assets/thirdparties/urlhaus-filter/urlhaus-filter-online.txt"
 		],
 		"cdnURLs": [
@@ -147,7 +156,7 @@
 			"https://gitcdn.xyz/repo/curbengh/urlhaus-filter/master/urlhaus-filter-online.txt",
 			"https://cdn.jsdelivr.net/gh/curbengh/urlhaus-filter/urlhaus-filter-online.txt",
 			"https://raw.githubusercontent.com/curbengh/urlhaus-filter/master/urlhaus-filter-online.txt",
-			"https://gitlab.com/curben/urlhaus-filter/raw/master/urlhaus-filter-online.txt"
+			"https://curben.gitlab.io/malware-filter/urlhaus-filter-online.txt"
 		],
 		"supportURL": "https://gitlab.com/curben/urlhaus-filter#urlhaus-malicious-url-blocklist"
 	},
