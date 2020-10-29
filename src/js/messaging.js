@@ -97,6 +97,12 @@ const onMessage = function(request, sender, callback) {
         µb.scriptlets.inject(request.tabId, request.scriptlet, callback);
         return;
 
+    case 'sfneBenchmark':
+        µb.staticNetFilteringEngine.benchmark().then(result => {
+            callback(result);
+        });
+        return;
+
     default:
         break;
     }
@@ -127,7 +133,8 @@ const onMessage = function(request, sender, callback) {
     case 'getAppData':
         response = {
             name: browser.runtime.getManifest().name,
-            version: vAPI.app.version
+            version: vAPI.app.version,
+            canBenchmark: µb.hiddenSettings.benchmarkDatasetURL !== 'unset',
         };
         break;
 
@@ -1641,7 +1648,7 @@ const onMessage = function(request, sender, callback) {
 
     case 'temporarilyAllowLargeMediaElement':
         if ( pageStore !== null ) {
-            pageStore.allowLargeMediaElementsUntil = Date.now() + 2000;
+            pageStore.allowLargeMediaElementsUntil = Date.now() + 5000;
         }
         break;
 
