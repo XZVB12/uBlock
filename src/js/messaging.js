@@ -42,7 +42,7 @@
 const µb = µBlock;
 
 const clickToLoad = function(request, sender) {
-    const { tabId, frameId } = µb.getMessageSenderDetails(sender);
+    const { tabId, frameId } = sender;
     if ( tabId === undefined || frameId === undefined ) { return false; }
     const pageStore = µb.pageStoreFromTabId(tabId);
     if ( pageStore === null ) { return false; }
@@ -154,7 +154,7 @@ const onMessage = function(request, sender, callback) {
     case 'launchElementPicker':
         // Launched from some auxiliary pages, clear context menu coords.
         µb.epickerArgs.mouse = false;
-        µb.elementPickerExec(request.tabId, request.targetURL, request.zap);
+        µb.elementPickerExec(request.tabId, 0, request.targetURL, request.zap);
         break;
 
     case 'gotoURL':
@@ -182,7 +182,9 @@ const onMessage = function(request, sender, callback) {
     case 'uiStyles':
         response = {
             uiStyles: µb.hiddenSettings.uiStyles,
-            uiTheme: µb.hiddenSettings.uiTheme,
+            uiTheme: vAPI.webextFlavor.soup.has('devbuild')
+                ? µb.hiddenSettings.uiTheme
+                : 'unset',
         };
         break;
 
@@ -545,17 +547,11 @@ vAPI.messaging.listen({
 
 const µb = µBlock;
 
-const retrieveContentScriptParameters = function(senderDetails, request) {
+const retrieveContentScriptParameters = function(sender, request) {
     if ( µb.readyToFilter !== true ) { return; }
-    const { url: senderURL, tabId, frameId } = senderDetails;
-    if (
-        tabId === undefined ||
-        frameId === undefined ||
-        senderURL === undefined ||
-        senderURL !== request.url && senderURL.startsWith('about:') === false
-    ) {
-        return;
-    }
+    const { tabId, frameId } = sender;
+    if ( tabId === undefined || frameId === undefined ) { return; }
+
     const pageStore = µb.pageStoreFromTabId(tabId);
     if ( pageStore === null || pageStore.getNetFilteringSwitch() === false ) {
         return;
@@ -631,7 +627,13 @@ const retrieveContentScriptParameters = function(senderDetails, request) {
     response.specificCosmeticFilters =
         µb.cosmeticFilteringEngine.retrieveSpecificSelectors(request, response);
 
-    if ( µb.canInjectScriptletsNow === false ) {
+    // https://github.com/uBlockOrigin/uBlock-issues/issues/688#issuecomment-748179731
+    //   For non-network URIs, scriptlet injection is deferred to here. The
+    //   effective URL is available here in `request.url`.
+    if (
+        µb.canInjectScriptletsNow === false ||
+        µb.URI.isNetworkURI(sender.frameURL) === false
+    ) {
         response.scriptlets = µb.scriptletFilteringEngine.retrieve(request);
     }
 
@@ -649,8 +651,7 @@ const onMessage = function(request, sender, callback) {
         break;
     }
 
-    const senderDetails = µb.getMessageSenderDetails(sender);
-    const pageStore = µb.pageStoreFromTabId(senderDetails.tabId);
+    const pageStore = µb.pageStoreFromTabId(sender.tabId);
 
     // Sync
     let response;
@@ -676,29 +677,29 @@ const onMessage = function(request, sender, callback) {
         break;
 
     case 'maybeGoodPopup':
-        µb.maybeGoodPopup.tabId = senderDetails.tabId;
+        µb.maybeGoodPopup.tabId = sender.tabId;
         µb.maybeGoodPopup.url = request.url;
         break;
 
     case 'shouldRenderNoscriptTags':
         if ( pageStore === null ) { break; }
-        const fctxt = µb.filteringContext.fromTabId(senderDetails.tabId);
+        const fctxt = µb.filteringContext.fromTabId(sender.tabId);
         if ( pageStore.filterScripting(fctxt, undefined) ) {
-            vAPI.tabs.executeScript(senderDetails.tabId, {
+            vAPI.tabs.executeScript(sender.tabId, {
                 file: '/js/scriptlets/noscript-spoof.js',
-                frameId: senderDetails.frameId,
+                frameId: sender.frameId,
                 runAt: 'document_end',
             });
         }
         break;
 
     case 'retrieveContentScriptParameters':
-        response = retrieveContentScriptParameters(senderDetails, request);
+        response = retrieveContentScriptParameters(sender, request);
         break;
 
     case 'retrieveGenericCosmeticSelectors':
-        request.tabId = senderDetails.tabId;
-        request.frameId = senderDetails.frameId;
+        request.tabId = sender.tabId;
+        request.frameId = sender.frameId;
         response = {
             result: µb.cosmeticFilteringEngine.retrieveGenericSelectors(request),
         };
@@ -748,7 +749,7 @@ const onMessage = function(request, sender, callback) {
             mouse: µb.epickerArgs.mouse,
             zap: µb.epickerArgs.zap,
             eprom: µb.epickerArgs.eprom,
-            pickerURL: vAPI.getURL(`/web_accessible_resources/epicker-ui.html${vAPI.warSecret()}`),
+            pickerURL: vAPI.getURL(`/web_accessible_resources/epicker-ui.html?secret=${vAPI.warSecret()}`),
         };
         µb.epickerArgs.target = '';
         break;
@@ -931,6 +932,16 @@ const backupUserData = async function() {
 const restoreUserData = async function(request) {
     const userData = request.userData;
 
+    // https://github.com/LiCybora/NanoDefenderFirefox/issues/196
+    //   Backup data could be from Chromium platform or from an older
+    //   Firefox version.
+    if (
+        vAPI.webextFlavor.soup.has('firefox') &&
+        vAPI.app.intFromVersion(userData.version) <= 1031003011
+    ) {
+        userData.hostnameSwitchesString += '\nno-csp-reports: * true';
+    }
+
     // https://github.com/chrisaljoudi/uBlock/issues/1102
     //   Ensure all currently cached assets are flushed from storage AND memory.
     µb.assets.rmrf();
@@ -1007,7 +1018,7 @@ const resetUserData = async function() {
     vAPI.app.restart();
 };
 
-// 3rd-party filters
+// Filter lists
 const prepListEntries = function(entries) {
     const µburi = µb.URI;
     for ( const k in entries ) {
@@ -1048,6 +1059,26 @@ const getLists = async function(callback) {
     callback(r);
 };
 
+// My filters
+
+// TODO: also return origin of embedded frames?
+const getOriginHints = function() {
+    const punycode = self.punycode;
+    const out = new Set();
+    for ( const tabId of µb.pageStores.keys() ) {
+        if ( tabId === -1 ) { continue; }
+        const tabContext = µb.tabContextManager.lookup(tabId);
+        if ( tabContext === null ) { continue; }
+        let { rootDomain, rootHostname } = tabContext;
+        if ( rootDomain.endsWith('-scheme') ) { continue; }
+        const isPunycode = rootHostname.includes('xn--');
+        out.add(isPunycode ? punycode.toUnicode(rootDomain) : rootDomain);
+        if ( rootHostname === rootDomain ) { continue; }
+        out.add(isPunycode ? punycode.toUnicode(rootHostname) : rootHostname);
+    }
+    return Array.from(out);
+};
+
 // My rules
 const getRules = function() {
     return {
@@ -1060,7 +1091,8 @@ const getRules = function() {
             µb.sessionFirewall.toArray().concat(
                 µb.sessionSwitches.toArray(),
                 µb.sessionURLFiltering.toArray()
-            )
+            ),
+        pslSelfie: self.publicSuffixList.toSelfie(),
     };
 };
 
@@ -1187,11 +1219,17 @@ const onMessage = function(request, sender, callback) {
         break;
 
     case 'getAutoCompleteDetails':
-        response = {
-            redirectResources: µb.redirectEngine.getResourceDetails(),
-            preparseDirectiveTokens: µb.preparseDirectives.getTokens(),
-            preparseDirectiveHints: µb.preparseDirectives.getHints(),
-        };
+        response = {};
+        if ( (request.hintUpdateToken || 0) === 0 ) {
+            response.redirectResources = µb.redirectEngine.getResourceDetails();
+            response.preparseDirectiveTokens = µb.preparseDirectives.getTokens();
+            response.preparseDirectiveHints = µb.preparseDirectives.getHints();
+            response.expertMode = µb.hiddenSettings.filterAuthorMode;
+        }
+        if ( request.hintUpdateToken !== µb.pageStoresToken ) {
+            response.originHints = getOriginHints();
+            response.hintUpdateToken = µb.pageStoresToken;
+        }
         break;
 
     case 'getRules':
@@ -1462,7 +1500,7 @@ vAPI.messaging.listen({
 // >>>>> start of local scope
 
 const onMessage = function(request, sender, callback) {
-    const tabId = sender && sender.tab ? sender.tab.id : 0;
+    const tabId = sender.tabId || 0;
 
     // Async
     switch ( request.what ) {
@@ -1589,6 +1627,9 @@ const logCSPViolations = function(pageStore, request) {
             if ( type === 'script' ) { type = 'inline-script'; }
             else if ( type === 'font' ) { type = 'inline-font'; }
         }
+        // The resource was blocked as a result of applying a CSP directive
+        // elsewhere rather than to the resource itself.
+        logData.modifier = undefined;
         fctxt.setURL(violation.url)
              .setType(type)
              .setFilter(logData)
@@ -1614,7 +1655,7 @@ logCSPViolations.policyDirectiveToTypeMap = new Map([
 ]);
 
 const onMessage = function(request, sender, callback) {
-    const tabId = sender && sender.tab ? sender.tab.id : 0;
+    const tabId = sender.tabId || 0;
     const pageStore = µb.pageStoreFromTabId(tabId);
 
     // Async

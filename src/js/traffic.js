@@ -137,7 +137,8 @@ const onBeforeRootFrameRequest = function(fctxt) {
     let logData;
 
     // If the site is whitelisted, disregard strict blocking
-    if ( µb.getNetFilteringSwitch(requestURL) === false ) {
+    const trusted = µb.getNetFilteringSwitch(requestURL) === false;
+    if ( trusted ) {
         result = 2;
         if ( loggerEnabled ) {
             logData = { engine: 'u', result: 2, raw: 'whitelisted' };
@@ -204,7 +205,7 @@ const onBeforeRootFrameRequest = function(fctxt) {
         fctxt.type = 'main_frame';
     }
 
-    const pageStore = µb.bindTabToPageStats(fctxt.tabId, 'beforeRequest');
+    const pageStore = µb.bindTabToPageStore(fctxt.tabId, 'beforeRequest');
     if ( pageStore !== null ) {
         pageStore.journalAddRootFrame('uncommitted', requestURL);
         pageStore.journalAddRequest(requestHostname, result);
@@ -216,7 +217,12 @@ const onBeforeRootFrameRequest = function(fctxt) {
 
     // https://github.com/uBlockOrigin/uBlock-issues/issues/760
     //   Redirect non-blocked request?
-    if ( result === 0 && pageStore !== null && snfe.hasQuery(fctxt) ) {
+    if (
+        result !== 1 &&
+        trusted === false &&
+        pageStore !== null &&
+        snfe.hasQuery(fctxt)
+    ) {
         pageStore.redirectNonBlockedRequest(fctxt);
     }
 
@@ -288,34 +294,14 @@ const toBlockDocResult = function(url, hostname, logData) {
 
 // Intercept and filter behind-the-scene requests.
 
-// https://github.com/gorhill/uBlock/issues/870
-// Finally, Chromium 49+ gained the ability to report network request of type
-// `beacon`, so now we can block them according to the state of the
-// "Disable hyperlink auditing/beacon" setting.
-
 const onBeforeBehindTheSceneRequest = function(fctxt) {
     const µb = µBlock;
     const pageStore = µb.pageStoreFromTabId(fctxt.tabId);
     if ( pageStore === null ) { return; }
 
-    // https://bugs.chromium.org/p/chromium/issues/detail?id=637577#c15
-    //   Do not filter behind-the-scene network request of type `beacon`: there
-    //   is no point. In any case, this will become a non-issue once
-    //   <https://bugs.chromium.org/p/chromium/issues/detail?id=522129> is
-    //   fixed.
-
-    // Blocking behind-the-scene requests can break a lot of stuff: prevent
-    // browser updates, prevent extension updates, prevent extensions from
-    // working properly, etc.
-    // So we filter if and only if the "advanced user" mode is selected.
     // https://github.com/gorhill/uBlock/issues/3150
     //   Ability to globally block CSP reports MUST also apply to
     //   behind-the-scene network requests.
-
-    // 2018-03-30:
-    //   Filter all behind-the-scene network requests like any other network
-    //   requests. Hopefully this will not break stuff as it used to be the
-    //   case.
 
     let result = 0;
 
@@ -335,8 +321,8 @@ const onBeforeBehindTheSceneRequest = function(fctxt) {
 
         // The "any-tab" scope is not whitelist-able, and in such case we must
         // use the origin URL as the scope. Most such requests aren't going to
-        // be blocked, so we further test for whitelisting and modify the
-        // result only when the request is being blocked.
+        // be blocked, so we test for whitelisting and modify the result only
+        // when the request is being blocked.
         if (
             result === 1 &&
             µb.getNetFilteringSwitch(fctxt.tabOrigin) === false
@@ -346,101 +332,73 @@ const onBeforeBehindTheSceneRequest = function(fctxt) {
         }
     }
 
+    // https://github.com/uBlockOrigin/uBlock-issues/issues/1204
+    onBeforeBehindTheSceneRequest.journalAddRequest(fctxt, result);
+
     if ( µb.logger.enabled ) {
         fctxt.setRealm('network').toLogger();
     }
 
+    // Redirected
+
+    if ( fctxt.redirectURL !== undefined ) {
+        return { redirectUrl: fctxt.redirectURL };
+    }
+
     // Blocked?
+
     if ( result === 1 ) {
         return { cancel: true };
     }
 };
 
-/******************************************************************************/
+// https://github.com/uBlockOrigin/uBlock-issues/issues/1204
+//   Report the tabless network requests to all page stores matching the
+//   document origin. This is an approximation, there is unfortunately no
+//   way to know for sure which exact page triggered a tabless network
+//   request.
 
-// https://github.com/gorhill/uBlock/issues/3140
+{
+    let hostname = '';
+    let pageStores = new Set();
+    let pageStoresToken = 0;
+    let gcTimer;
 
-const onBeforeMaybeSpuriousCSPReport = (function() {
-    let textDecoder;
-
-    return function(details) {
-        const fctxt = µBlock.filteringContext.fromWebrequestDetails(details);
-
-        // Ignore behind-the-scene requests.
-        if ( fctxt.tabId < 0 ) { return; }
-
-        // Lookup the page store associated with this tab id.
-        const pageStore = µBlock.pageStoreFromTabId(fctxt.tabId);
-        if ( pageStore === null ) { return; }
-
-        // If uBO is disabled for the page, it can't possibly causes CSP
-        // reports to be triggered.
-        if ( pageStore.getNetFilteringSwitch() === false ) { return; }
-
-        // A resource was redirected to a neutered one?
-        // TODO: mind injected scripts/styles as well.
-        if ( pageStore.internalRedirectionCount === 0 ) { return; }
-
-        if (
-            textDecoder === undefined &&
-            typeof self.TextDecoder === 'function'
-        ) {
-            textDecoder = new TextDecoder();
-        }
-
-        // Find out whether the CSP report is a potentially spurious CSP report.
-        // If from this point on we are unable to parse the CSP report data,
-        // the safest assumption to protect users is to assume the CSP report
-        // is spurious.
-        if (
-            textDecoder !== undefined &&
-            details.method === 'POST'
-        ) {
-            const raw = details.requestBody && details.requestBody.raw;
-            if (
-                Array.isArray(raw) &&
-                raw.length !== 0 &&
-                raw[0] instanceof Object &&
-                raw[0].bytes instanceof ArrayBuffer
-            ) {
-                let data;
-                try {
-                    data = JSON.parse(textDecoder.decode(raw[0].bytes));
-                } catch (ex) {
-                }
-                if ( data instanceof Object ) {
-                    const report = data['csp-report'];
-                    if ( report instanceof Object ) {
-                        const blocked =
-                            report['blocked-uri'] || report['blockedURI'];
-                        const validBlocked = typeof blocked === 'string';
-                        const source =
-                            report['source-file'] || report['sourceFile'];
-                        const validSource = typeof source === 'string';
-                        if (
-                            (validBlocked || validSource) &&
-                            (!validBlocked || !blocked.startsWith('data')) &&
-                            (!validSource || !source.startsWith('data'))
-                        ) {
-                            return;
-                        }
-                    }
-                }
-            }
-        }
-
-        // At this point, we have a potentially spurious CSP report.
-
-        if ( µBlock.logger.enabled ) {
-            fctxt.setRealm('network')
-                 .setType('csp_report')
-                 .setFilter({ result: 1, source: 'global', raw: 'no-spurious-csp-report' })
-                 .toLogger();
-        }
-
-        return { cancel: true };
+    const reset = function() {
+        hostname = '';
+        pageStores = new Set();
+        pageStoresToken = 0;
     };
-})();
+
+    const gc = ( ) => {
+        gcTimer = undefined;
+        if ( pageStoresToken !== µBlock.pageStoresToken ) { return reset(); }
+        gcTimer = vAPI.setTimeout(gc, 30011);
+    };
+
+    onBeforeBehindTheSceneRequest.journalAddRequest = (fctxt, result) => {
+        const docHostname = fctxt.getDocHostname();
+        if (
+            docHostname !== hostname ||
+            pageStoresToken !== µBlock.pageStoresToken
+        ) {
+            hostname = docHostname;
+            pageStores = new Set();
+            for ( const pageStore of µBlock.pageStores.values() ) {
+                if ( pageStore.tabHostname !== docHostname ) { continue; }
+                pageStores.add(pageStore);
+            }
+            pageStoresToken = µBlock.pageStoresToken;
+            if ( gcTimer !== undefined ) {
+                clearTimeout(gcTimer);
+            }
+            gcTimer = vAPI.setTimeout(gc, 30011);
+        }
+        for ( const pageStore of pageStores ) {
+            pageStore.journalAddRequest(fctxt.getHostname(), result);
+        }
+    };
+}
 
 /******************************************************************************/
 
@@ -467,20 +425,34 @@ const onHeadersReceived = function(details) {
     let pageStore = µb.pageStoreFromTabId(fctxt.tabId);
     if ( pageStore === null ) {
         if ( isRootDoc === false ) { return; }
-        pageStore = µb.bindTabToPageStats(fctxt.tabId, 'beforeRequest');
+        pageStore = µb.bindTabToPageStore(fctxt.tabId, 'beforeRequest');
     }
     if ( pageStore.getNetFilteringSwitch(fctxt) === false ) { return; }
 
     if ( fctxt.itype === fctxt.IMAGE || fctxt.itype === fctxt.MEDIA ) {
-        return foilLargeMediaElement(details, fctxt, pageStore);
+        const result = foilLargeMediaElement(details, fctxt, pageStore);
+        if ( result !== undefined ) { return result; }
     }
-
-    if ( isRootDoc === false && fctxt.itype !== fctxt.SUB_FRAME ) { return; }
 
     // Keep in mind response headers will be modified in-place if needed, so
     // `details.responseHeaders` will always point to the modified response
     // headers.
     const responseHeaders = details.responseHeaders;
+
+    if ( isRootDoc === false && µb.hiddenSettings.filterOnHeaders === true ) {
+        const result = pageStore.filterOnHeaders(fctxt, responseHeaders);
+        if ( result !== 0 ) {
+            if ( µb.logger.enabled ) {
+                fctxt.setRealm('network').toLogger();
+            }
+            if ( result === 1 ) {
+                pageStore.journalAddRequest(fctxt.getHostname(), 1);
+                return { cancel: true };
+            }
+        }
+    }
+
+    if ( isRootDoc === false && fctxt.itype !== fctxt.SUB_FRAME ) { return; }
 
     // https://github.com/gorhill/uBlock/issues/2813
     //   Disable the blocking of large media elements if the document is itself
@@ -1070,41 +1042,21 @@ return {
         vAPI.net = new vAPI.Net();
         vAPI.net.suspend();
 
-        return function() {
+        return ( ) => {
             vAPI.net.setSuspendableListener(onBeforeRequest);
             vAPI.net.addListener(
                 'onHeadersReceived',
                 onHeadersReceived,
-                {
-                    types: [
-                        'main_frame',
-                        'sub_frame',
-                        'image',
-                        'media',
-                        'xmlhttprequest',
-                    ],
-                    urls: [ 'http://*/*', 'https://*/*' ],
-                },
+                { urls: [ 'http://*/*', 'https://*/*' ] },
                 [ 'blocking', 'responseHeaders' ]
             );
-            if ( vAPI.net.validTypes.has('csp_report') ) {
-                vAPI.net.addListener(
-                    'onBeforeRequest',
-                    onBeforeMaybeSpuriousCSPReport,
-                    {
-                        types: [ 'csp_report' ],
-                        urls: [ 'http://*/*', 'https://*/*' ]
-                    },
-                    [ 'blocking', 'requestBody' ]
-                );
-            }
             vAPI.net.unsuspend(true);
         };
     })(),
 
-    strictBlockBypass: function(hostname) {
+    strictBlockBypass: hostname => {
         strictBlockBypasser.bypass(hostname);
-    }
+    },
 };
 
 /******************************************************************************/

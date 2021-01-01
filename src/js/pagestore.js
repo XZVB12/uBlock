@@ -134,11 +134,23 @@ const NetFilteringResultCache = class {
     }
 
     lookupResult(fctxt) {
-        return this.results.get(
+        const entry = this.results.get(
             fctxt.getDocHostname() + ' ' +
             fctxt.type + ' ' +
             fctxt.url
         );
+        if ( entry === undefined ) { return; }
+        // We need to use a new WAR secret if one is present since WAR secrets
+        // can only be used once.
+        if (
+            entry.redirectURL !== undefined &&
+            entry.redirectURL.startsWith(this.extensionOriginURL)
+        ) {
+            const redirectURL = new URL(entry.redirectURL);
+            redirectURL.searchParams.set('secret', vAPI.warSecret());
+            entry.redirectURL = redirectURL.href;
+        }
+        return entry;
     }
 
     lookupAllBlocked(hostname) {
@@ -158,6 +170,7 @@ const NetFilteringResultCache = class {
 };
 
 NetFilteringResultCache.prototype.shelfLife = 15000;
+NetFilteringResultCache.prototype.extensionOriginURL = vAPI.getURL('/');
 
 /******************************************************************************/
 
@@ -259,25 +272,12 @@ const PageStore = class {
         this.popupBlockedCount = 0;
         this.largeMediaCount = 0;
         this.largeMediaTimer = null;
-        this.internalRedirectionCount = 0;
         this.allowLargeMediaElementsRegex = undefined;
         this.extraData.clear();
 
         this.frameAddCount = 0;
         this.frames = new Map();
         this.setFrameURL(0, tabContext.rawURL);
-
-        // The current filtering context is cloned because:
-        // - We may be called with or without the current context having been
-        //   initialized.
-        // - If it has been initialized, we do not want to change the state
-        //   of the current context.
-        const fctxt = µb.logger.enabled
-            ? µb.filteringContext
-                .duplicate()
-                .fromTabId(tabId)
-                .setURL(tabContext.rawURL)
-            : undefined;
 
         // https://github.com/uBlockOrigin/uBlock-issues/issues/314
         const masterSwitch = tabContext.getNetFilteringSwitch();
@@ -292,10 +292,14 @@ const PageStore = class {
             µb.logger.enabled &&
             context === 'tabCommitted'
         ) {
-            fctxt.setRealm('cosmetic')
-                 .setType('dom')
-                 .setFilter(µb.sessionSwitches.toLogData())
-                 .toLogger();
+            µb.filteringContext
+                .duplicate()
+                .fromTabId(tabId)
+                .setURL(tabContext.rawURL)
+                .setRealm('cosmetic')
+                .setType('dom')
+                .setFilter(µb.sessionSwitches.toLogData())
+                .toLogger();
         }
 
         return this;
@@ -373,14 +377,15 @@ const PageStore = class {
     setFrameURL(frameId, frameURL) {
         let frameStore = this.frames.get(frameId);
         if ( frameStore !== undefined ) {
-            frameStore.init(frameURL);
-        } else {
-            frameStore = FrameStore.factory(frameURL);
-            this.frames.set(frameId, frameStore);
-            this.frameAddCount += 1;
-            if ( (this.frameAddCount & 0b111111) === 0 ) {
-                this.pruneFrames();
-            }
+            return frameURL === frameStore.rawURL
+                ? frameStore
+                : frameStore.init(frameURL);
+        }
+        frameStore = FrameStore.factory(frameURL);
+        this.frames.set(frameId, frameStore);
+        this.frameAddCount += 1;
+        if ( (this.frameAddCount & 0b111111) === 0 ) {
+            this.pruneFrames();
         }
         return frameStore;
     }
@@ -540,6 +545,7 @@ const PageStore = class {
 
     filterRequest(fctxt) {
         fctxt.filter = undefined;
+        fctxt.redirectURL = undefined;
 
         if ( this.getNetFilteringSwitch(fctxt) === false ) {
             return 0;
@@ -608,7 +614,7 @@ const PageStore = class {
             result = snfe.matchString(fctxt);
             if ( result !== 0 ) {
                 if ( loggerEnabled ) {
-                    fctxt.filter = snfe.toLogData();
+                    fctxt.setFilter(snfe.toLogData());
                 }
                 // https://github.com/uBlockOrigin/uBlock-issues/issues/943
                 //   Blanket-except blocked aliased canonical hostnames?
@@ -662,13 +668,59 @@ const PageStore = class {
         return result;
     }
 
+    filterOnHeaders(fctxt, headers) {
+        fctxt.filter = undefined;
+
+        if ( this.getNetFilteringSwitch(fctxt) === false ) { return 0; }
+
+        let result = µb.staticNetFilteringEngine.matchHeaders(fctxt, headers);
+        if ( result === 0 ) { return 0; }
+
+        const loggerEnabled = µb.logger.enabled;
+        if ( loggerEnabled ) {
+            fctxt.filter = µb.staticNetFilteringEngine.toLogData();
+        }
+
+        // Dynamic filtering allow rules
+        // URL filtering
+        if (
+            result === 1 &&
+            µb.sessionURLFiltering.evaluateZ(
+                fctxt.getTabHostname(),
+                fctxt.url,
+                fctxt.type
+            ) === 2
+        ) {
+            result = 2;
+            if ( loggerEnabled ) {
+                fctxt.filter = µb.sessionURLFiltering.toLogData();
+            }
+        }
+        // Hostname filtering
+        if (
+            result === 1 &&
+            µb.userSettings.advancedUserEnabled &&
+            µb.sessionFirewall.evaluateCellZY(
+                fctxt.getTabHostname(),
+                fctxt.getHostname(),
+                fctxt.type
+            ) === 2
+        ) {
+            result = 2;
+            if ( loggerEnabled ) {
+                fctxt.filter = µb.sessionFirewall.toLogData();
+            }
+        }
+
+        return result;
+    }
+
     redirectBlockedRequest(fctxt) {
         if ( µb.hiddenSettings.ignoreRedirectFilters === true ) { return; }
-        const directive = µb.staticNetFilteringEngine.redirectRequest(fctxt);
-        if ( directive === undefined ) { return; }
-        this.internalRedirectionCount += 1;
+        const directives = µb.staticNetFilteringEngine.redirectRequest(fctxt);
+        if ( directives === undefined ) { return; }
         if ( µb.logger.enabled !== true ) { return; }
-        fctxt.pushFilter(directive.logData());
+        fctxt.pushFilters(directives.map(a => a.logData()));
         if ( fctxt.redirectURL === undefined ) { return; }
         fctxt.pushFilter({
             source: 'redirect',
@@ -821,20 +873,16 @@ const PageStore = class {
                     ? frameStore.rawURL
                     : fctxt.getDocOrigin()
             );
-            if ( result === 2 ) {
-                exceptCname = µb.logger.enabled
-                    ? µb.staticNetFilteringEngine.toLogData()
-                    : true;
-            } else {
-                exceptCname = false;
-            }
+            exceptCname = result === 2
+                ? µb.staticNetFilteringEngine.toLogData()
+                : false;
             if ( frameStore instanceof Object ) {
                 frameStore.exceptCname = exceptCname;
             }
         }
         if ( exceptCname === false ) { return false; }
         if ( exceptCname instanceof Object ) {
-            fctxt.pushFilter(exceptCname);
+            fctxt.setFilter(exceptCname);
         }
         return true;
     }
